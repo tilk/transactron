@@ -30,7 +30,7 @@ class MethodMap:
     def __init__(self, transactions: Iterable["Transaction"]):
         self.methods_by_transaction = dict[Transaction, list[Method]]()
         self.transactions_by_method = defaultdict[Method, list[Transaction]](list)
-        self.readiness_by_call = dict[tuple[Transaction, Method], ValueLike]()
+        self.argument_by_call = dict[tuple[Transaction, Method], MethodStruct]()
         self.ancestors_by_call = dict[tuple[Transaction, Method], tuple[Method, ...]]()
         self.method_parents = defaultdict[Method, list[TransactionBase]](list)
 
@@ -42,7 +42,7 @@ class MethodMap:
                     raise RuntimeError(f"Method '{method.name}' can't be called twice from the same transaction")
                 self.methods_by_transaction[transaction].append(method)
                 self.transactions_by_method[method].append(transaction)
-                self.readiness_by_call[(transaction, method)] = method._validate_arguments(arg_rec)
+                self.argument_by_call[(transaction, method)] = arg_rec
                 self.ancestors_by_call[(transaction, method)] = new_ancestors = (method, *ancestors)
                 rec(transaction, method, new_ancestors)
 
@@ -340,7 +340,7 @@ class TransactionManager(Elaboratable):
 
         for transaction in self.transactions:
             ready = [
-                method_map.readiness_by_call[transaction, method]
+                method._validate_arguments(method_map.argument_by_call[transaction, method])
                 for method in method_map.methods_by_transaction[transaction]
             ]
             m.d.comb += transaction.runnable.eq(Cat(ready).all())
