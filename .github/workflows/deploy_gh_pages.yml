@@ -1,0 +1,48 @@
+name: Build docs and trigger gh-pages
+
+on:
+  push:
+    branches:
+      - "master"
+  pull_request:
+    branches:
+      - "master"
+  workflow_dispatch:
+
+jobs:
+  push_gh-pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_MAIL: ${{github.event.pusher.email}}
+      GH_NAME: ${{github.event.pusher.name}}
+      DOCS_DIR: "docs"
+      BUILD_DIR: "build"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python3 -m venv venv
+          . venv/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install .[dev]
+
+      - name: Build documentation
+        run: |
+          . venv/bin/activate
+          ./ci/build_docs.sh
+
+      - name: Push documentation
+        # Deploy documentation only when on master
+        if: github.ref == 'refs/heads/master'
+        run: |
+          . venv/bin/activate
+          ./ci/push_gh_pages.sh
