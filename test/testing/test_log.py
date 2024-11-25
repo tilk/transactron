@@ -78,13 +78,13 @@ class TestLog(TestCaseWithSimulator):
             sim.add_testbench(proc)
 
         assert re.search(
-            r"WARNING  test_logger:logging\.py:\d+ \[test/transactron/testing/test_log\.py:\d+\] "
+            r"WARNING  test_logger:logging\.py:\d+ \[test/testing/test_log\.py:\d+\] "
             + r"Log triggered under Amaranth If value\+3=0x2d",
             caplog.text,
         )
         for i in range(0, 50, 2):
             assert re.search(
-                r"WARNING  test_logger:logging\.py:\d+ \[test/transactron/testing/test_log\.py:\d+\] "
+                r"WARNING  test_logger:logging\.py:\d+ \[test/testing/test_log\.py:\d+\] "
                 + f"Input is even! input={i}, counter={i + 1}",
                 caplog.text,
             )
@@ -102,7 +102,7 @@ class TestLog(TestCaseWithSimulator):
                 sim.add_testbench(proc)
 
         assert re.search(
-            r"ERROR    test_logger:logging\.py:\d+ \[test/transactron/testing/test_log\.py:\d+\] "
+            r"ERROR    test_logger:logging\.py:\d+ \[test/testing/test_log\.py:\d+\] "
             + "Input is different than output! input=0x1 output=0x0",
             caplog.text,
         )
@@ -120,6 +120,6 @@ class TestLog(TestCaseWithSimulator):
                 sim.add_testbench(proc)
 
         assert re.search(
-            r"ERROR    test_logger:logging\.py:\d+ \[test/transactron/testing/test_log\.py:\d+\] Output differs",
+            r"ERROR    test_logger:logging\.py:\d+ \[test/testing/test_log\.py:\d+\] Output differs",
             caplog.text,
         )

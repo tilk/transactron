@@ -84,7 +84,7 @@ class MethodMap(Elaboratable, Transformer):
         *,
         i_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], RecordDict]]] = None,
         o_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], RecordDict]]] = None,
-        src_loc: int | SrcLoc = 0
+        src_loc: int | SrcLoc = 0,
     ):
         """
         Parameters
@@ -150,7 +150,7 @@ class MethodFilter(Elaboratable, Transformer):
         default: Optional[RecordDict] = None,
         *,
         use_condition: bool = False,
-        src_loc: int | SrcLoc = 0
+        src_loc: int | SrcLoc = 0,
     ):
         """
         Parameters
@@ -211,7 +211,7 @@ class MethodProduct(Elaboratable, Unifier):
         targets: list[Method],
         combiner: Optional[tuple[MethodLayout, Callable[[TModule, list[MethodStruct]], RecordDict]]] = None,
         *,
-        src_loc: int | SrcLoc = 0
+        src_loc: int | SrcLoc = 0,
     ):
         """Method product.
 
@@ -267,7 +267,7 @@ class MethodTryProduct(Elaboratable, Unifier):
             tuple[MethodLayout, Callable[[TModule, list[tuple[Value, MethodStruct]]], RecordDict]]
         ] = None,
         *,
-        src_loc: int | SrcLoc = 0
+        src_loc: int | SrcLoc = 0,
     ):
         """Method product with optional calling.
 
@@ -418,7 +418,7 @@ class ConnectAndMapTrans(Elaboratable):
         *,
         i_fun: Optional[Callable[[TModule, MethodStruct], RecordDict]] = None,
         o_fun: Optional[Callable[[TModule, MethodStruct], RecordDict]] = None,
-        src_loc: int | SrcLoc = 0
+        src_loc: int | SrcLoc = 0,
     ):
         """
         Parameters

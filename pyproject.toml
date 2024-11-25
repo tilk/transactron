@@ -1,0 +1,43 @@
+[project]
+name = "transactron"
+version = "2024.11.19.dev0"
+dependencies = [
+    "amaranth == 0.5.3",
+    "amaranth-stubs @ git+https://github.com/kuznia-rdzeni/amaranth-stubs.git@edb302b001433edf4c8568190adc9bd0c0039f45",
+    "dataclasses-json == 0.6.3"
+]
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyright == 1.1.332",
+    "pytest == 8.0.0",
+    "pytest-xdist == 3.5.0",
+    "hypothesis == 6.99.6",
+    "parameterized == 0.8.1",
+    "flake8 == 7.0.0",
+    "black == 24.4.2",
+    "pep8-naming == 0.13.3"
+]
+
+[tool.pyright]
+include = ["transactron", "test", "scripts"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportWildcardImportFromLibrary = false
+
+[tool.pytest.ini_options]
+minversion = "7.2.2"
+testpaths = "tests"
+norecursedirs = ['*.egg', '.*', 'build', 'dist', 'venv', '__traces__', '__pycache__']
+filterwarnings = [
+    "ignore:cannot collect test class 'TestbenchContext':pytest.PytestCollectionWarning",
+    "ignore:cannot collect test class 'TestbenchIO':pytest.PytestCollectionWarning",
+    "ignore:No files were found in testpaths:pytest.PytestConfigWarning:"
+]

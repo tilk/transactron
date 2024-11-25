@@ -127,7 +127,7 @@ class Serializer(Elaboratable):
         serialized_req_method: Method,
         serialized_resp_method: Method,
         depth: int = 4,
-        src_loc: int | SrcLoc = 0
+        src_loc: int | SrcLoc = 0,
     ):
         """
         Parameters
