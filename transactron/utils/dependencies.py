@@ -151,10 +151,6 @@ class DependencyManager:
 
         return val
 
-    def dependency_provided(self, key: DependencyKey) -> bool:
-        """Checks if any dependency for a key is provided (ignores `empty_valid` parameter)"""
-        return key in self.dependencies
-
 
 class DependencyContext:
     stack: list[DependencyManager] = []
