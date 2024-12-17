@@ -1,7 +1,7 @@
 from typing import Any
 from amaranth import *
 from amaranth.hdl import ShapeCastable, ValueCastable
-from amaranth.utils import bits_for, exact_log2
+from amaranth.utils import bits_for, ceil_log2
 from amaranth.lib import data
 from collections.abc import Iterable, Mapping
 
@@ -59,28 +59,20 @@ def count_leading_zeros(s: Value) -> Value:
 
         return result
 
-    try:
-        xlen_log = exact_log2(len(s))
-    except ValueError:
-        raise NotImplementedError("CountLeadingZeros - only sizes aligned to power of 2 are supperted")
-
-    value = iter(s, xlen_log)
+    slen = len(s)
+    slen_log = ceil_log2(slen)
+    closest_pow_2_of_s = 2**slen_log
+    zeros_prepend_count = closest_pow_2_of_s - slen
+    value = iter(Cat(C(0, shape=zeros_prepend_count), s), slen_log)
 
     # 0 number edge case
     # if s == 0 then iter() returns value off by 1
     # this switch negates this effect
-    high_bit = 1 << xlen_log
-
-    result = Mux(s.any(), value, high_bit)
+    result = Mux(s.any(), value, slen)
     return result
 
 
 def count_trailing_zeros(s: Value) -> Value:
-    try:
-        exact_log2(len(s))
-    except ValueError:
-        raise NotImplementedError("CountTrailingZeros - only sizes aligned to power of 2 are supperted")
-
     return count_leading_zeros(s[::-1])
 
 
