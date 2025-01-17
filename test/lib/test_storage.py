@@ -1,3 +1,5 @@
+from collections.abc import Callable
+from amaranth_types import ShapeLike
 import pytest
 import random
 from collections import deque
@@ -135,6 +137,12 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
                 sim.add_testbench(self.remove_process(in_remove))
 
 
+bank_shapes = [
+    (6, lambda x: x, lambda x: x),
+    (make_layout(("data_field", 6)), lambda x: {"data_field": x}, lambda x: x["data_field"]),
+]
+
+
 class TestMemoryBank(TestCaseWithSimulator):
     test_conf = [(9, 3, 3, 3, 14), (16, 1, 1, 3, 15), (16, 1, 1, 1, 16), (12, 3, 1, 1, 17), (9, 0, 0, 0, 18)]
 
@@ -142,6 +150,7 @@ class TestMemoryBank(TestCaseWithSimulator):
     @pytest.mark.parametrize("transparent", [False, True])
     @pytest.mark.parametrize("read_ports", [1, 2])
     @pytest.mark.parametrize("write_ports", [1, 2])
+    @pytest.mark.parametrize("shape,to_shape,from_shape", bank_shapes)
     def test_mem(
         self,
         max_addr: int,
@@ -152,13 +161,15 @@ class TestMemoryBank(TestCaseWithSimulator):
         transparent: bool,
         read_ports: int,
         write_ports: int,
+        shape: ShapeLike,
+        to_shape: Callable,
+        from_shape: Callable,
     ):
         test_count = 200
 
-        data_width = 6
         m = SimpleTestCircuit(
             MemoryBank(
-                shape=make_layout(("data_field", data_width)),
+                shape=shape,
                 depth=max_addr,
                 transparent=transparent,
                 read_ports=read_ports,
@@ -174,9 +185,9 @@ class TestMemoryBank(TestCaseWithSimulator):
         def writer(i):
             async def process(sim: TestbenchContext):
                 for cycle in range(test_count):
-                    d = random.randrange(2**data_width)
+                    d = random.randrange(2 ** Shape.cast(shape).width)
                     a = random.randrange(max_addr)
-                    await m.write[i].call(sim, data={"data_field": d}, addr=a)
+                    await m.write[i].call(sim, data=to_shape(d), addr=a)
                     await sim.delay(1e-9 * (i + 2 if not transparent else i))
                     data[a] = d
                     await self.random_wait(sim, writer_rand)
@@ -203,7 +214,7 @@ class TestMemoryBank(TestCaseWithSimulator):
                         await self.random_wait(sim, reader_resp_rand or 1, min_cycle_cnt=1)
                         await sim.delay(1e-9 * (write_ports + 3))
                     d = read_req_queues[i].popleft()
-                    assert (await m.read_resp[i].call(sim)).data.data_field == d
+                    assert from_shape((await m.read_resp[i].call(sim)).data) == d
                     await self.random_wait(sim, reader_resp_rand)
 
             return process
@@ -225,13 +236,24 @@ class TestAsyncMemoryBank(TestCaseWithSimulator):
     )
     @pytest.mark.parametrize("read_ports", [1, 2])
     @pytest.mark.parametrize("write_ports", [1, 2])
-    def test_mem(self, max_addr: int, writer_rand: int, reader_rand: int, seed: int, read_ports: int, write_ports: int):
+    @pytest.mark.parametrize("shape,to_shape,from_shape", bank_shapes)
+    def test_mem(
+        self,
+        max_addr: int,
+        writer_rand: int,
+        reader_rand: int,
+        seed: int,
+        read_ports: int,
+        write_ports: int,
+        shape: ShapeLike,
+        to_shape: Callable,
+        from_shape: Callable,
+    ):
         test_count = 200
 
-        data_width = 6
         m = SimpleTestCircuit(
             AsyncMemoryBank(
-                shape=make_layout(("data_field", data_width)),
+                shape=shape,
                 depth=max_addr,
                 read_ports=read_ports,
                 write_ports=write_ports,
@@ -245,9 +267,9 @@ class TestAsyncMemoryBank(TestCaseWithSimulator):
         def writer(i):
             async def process(sim: TestbenchContext):
                 for cycle in range(test_count):
-                    d = random.randrange(2**data_width)
+                    d = random.randrange(2 ** Shape.cast(shape).width)
                     a = random.randrange(max_addr)
-                    await m.write[i].call(sim, data={"data_field": d}, addr=a)
+                    await m.write[i].call(sim, data=to_shape(d), addr=a)
                     await sim.delay(1e-9 * (i + 2))
                     data[a] = d
                     await self.random_wait(sim, writer_rand, min_cycle_cnt=1)
@@ -261,7 +283,7 @@ class TestAsyncMemoryBank(TestCaseWithSimulator):
                     d = await m.read[i].call(sim, addr=a)
                     await sim.delay(1e-9)
                     expected_d = data[a]
-                    assert d["data"]["data_field"] == expected_d
+                    assert from_shape(d.data) == expected_d
                     await self.random_wait(sim, reader_rand, min_cycle_cnt=1)
 
             return process
