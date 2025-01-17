@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from typing import Literal, Optional, overload
 from collections.abc import Iterable
 from amaranth import *
+from amaranth.lib.data import ArrayLayout
 from amaranth_types import ShapeLike
 from transactron.utils._typing import HasElaborate, ModuleLike, ValueLike
 
@@ -272,13 +273,13 @@ class MultiPriorityEncoder(Elaboratable):
         self.outputs_count = outputs_count
 
         self.input = Signal(self.input_width)
-        self.outputs = [Signal(range(self.input_width), name=f"output_{i}") for i in range(self.outputs_count)]
-        self.valids = [Signal(name=f"valid_{i}") for i in range(self.outputs_count)]
+        self.outputs = Signal(ArrayLayout(range(self.input_width), self.outputs_count))
+        self.valids = Signal(self.outputs_count)
 
     @staticmethod
     def create(
         m: Module, input_width: int, input: ValueLike, outputs_count: int = 1, name: Optional[str] = None
-    ) -> list[tuple[Signal, Signal]]:
+    ) -> list[tuple[Value, Value]]:
         """Syntax sugar for creating MultiPriorityEncoder
 
         This static method allows to use MultiPriorityEncoder in a more functional
@@ -327,12 +328,10 @@ class MultiPriorityEncoder(Elaboratable):
             except AttributeError:
                 setattr(m.submodules, name, prio_encoder)
         m.d.comb += prio_encoder.input.eq(input)
-        return list(zip(prio_encoder.outputs, prio_encoder.valids))
+        return [(prio_encoder.outputs[i], prio_encoder.valids[i]) for i in range(outputs_count)]
 
     @staticmethod
-    def create_simple(
-        m: Module, input_width: int, input: ValueLike, name: Optional[str] = None
-    ) -> tuple[Signal, Signal]:
+    def create_simple(m: Module, input_width: int, input: ValueLike, name: Optional[str] = None) -> tuple[Value, Value]:
         """Syntax sugar for creating MultiPriorityEncoder
 
         This is the same as `create` function, but with `outputs_count` hardcoded to 1.
@@ -422,8 +421,8 @@ class RingMultiPriorityEncoder(Elaboratable):
         self.input = Signal(self.input_width)
         self.first = Signal(range(self.input_width))
         self.last = Signal(range(self.input_width))
-        self.outputs = [Signal(range(self.input_width), name=f"output_{i}") for i in range(self.outputs_count)]
-        self.valids = [Signal(name=f"valid_{i}") for i in range(self.outputs_count)]
+        self.outputs = Signal(ArrayLayout(range(self.input_width), self.outputs_count))
+        self.valids = Signal(self.outputs_count)
 
     @staticmethod
     def create(
@@ -434,7 +433,7 @@ class RingMultiPriorityEncoder(Elaboratable):
         last: ValueLike,
         outputs_count: int = 1,
         name: Optional[str] = None,
-    ) -> list[tuple[Signal, Signal]]:
+    ) -> list[tuple[Value, Value]]:
         """Syntax sugar for creating RingMultiPriorityEncoder
 
         This static method allows to use RingMultiPriorityEncoder in a more functional
@@ -493,12 +492,12 @@ class RingMultiPriorityEncoder(Elaboratable):
         m.d.comb += prio_encoder.input.eq(input)
         m.d.comb += prio_encoder.first.eq(first)
         m.d.comb += prio_encoder.last.eq(last)
-        return list(zip(prio_encoder.outputs, prio_encoder.valids))
+        return [(prio_encoder.outputs[i], prio_encoder.valids[i]) for i in range(outputs_count)]
 
     @staticmethod
     def create_simple(
         m: Module, input_width: int, input: ValueLike, first: ValueLike, last: ValueLike, name: Optional[str] = None
-    ) -> tuple[Signal, Signal]:
+    ) -> tuple[Value, Value]:
         """Syntax sugar for creating RingMultiPriorityEncoder
 
         This is the same as `create` function, but with `outputs_count` hardcoded to 1.
@@ -563,10 +562,10 @@ class StableSelectingNetwork(Elaboratable):
         self.n = n
         self.shape = shape
 
-        self.inputs = [Signal(shape) for _ in range(n)]
-        self.valids = [Signal() for _ in range(n)]
+        self.inputs = Signal(ArrayLayout(shape, n))
+        self.valids = Signal(n)
 
-        self.outputs = [Signal(shape) for _ in range(n)]
+        self.outputs = Signal(ArrayLayout(shape, n))
         self.output_cnt = Signal(range(n + 1))
 
     def elaborate(self, platform):
