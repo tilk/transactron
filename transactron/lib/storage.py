@@ -1,5 +1,4 @@
 from amaranth import *
-from amaranth.lib.data import View
 from amaranth.utils import *
 import amaranth.lib.memory as memory
 from amaranth_types import ShapeLike
@@ -124,8 +123,12 @@ class MemoryBank(Elaboratable):
             with m.Else():
                 m.d.sync += read_output_valid[i].eq(0)
 
-            # Amaranth Mux drops lib.data Layouts
-            return {"data": View(self.shape, Mux(overflow_valid[i], overflow_data[i], read_port[i].data))}
+            ret = Signal(self.shape)
+            with m.If(overflow_valid[i]):
+                m.d.av_comb += ret.eq(overflow_data[i])
+            with m.Else():
+                m.d.av_comb += ret.eq(read_port[i].data)
+            return {"data": ret}
 
         for i in range(self.reads_ports):
             m.d.comb += read_port[i].en.eq(0)  # because the init value is 1
