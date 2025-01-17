@@ -5,6 +5,7 @@ from datetime import timedelta
 from hypothesis import given, settings, Phase
 from transactron.testing import *
 from transactron.lib.storage import *
+from transactron.utils.transactron_helpers import make_layout
 
 
 class TestContentAddressableMemory(TestCaseWithSimulator):
@@ -157,8 +158,8 @@ class TestMemoryBank(TestCaseWithSimulator):
         data_width = 6
         m = SimpleTestCircuit(
             MemoryBank(
-                data_layout=[("data", data_width)],
-                elem_count=max_addr,
+                shape=make_layout(("data_field", data_width)),
+                depth=max_addr,
                 transparent=transparent,
                 read_ports=read_ports,
                 write_ports=write_ports,
@@ -175,7 +176,7 @@ class TestMemoryBank(TestCaseWithSimulator):
                 for cycle in range(test_count):
                     d = random.randrange(2**data_width)
                     a = random.randrange(max_addr)
-                    await m.write[i].call(sim, data={"data": d}, addr=a)
+                    await m.write[i].call(sim, data={"data_field": d}, addr=a)
                     await sim.delay(1e-9 * (i + 2 if not transparent else i))
                     data[a] = d
                     await self.random_wait(sim, writer_rand)
@@ -202,7 +203,7 @@ class TestMemoryBank(TestCaseWithSimulator):
                         await self.random_wait(sim, reader_resp_rand or 1, min_cycle_cnt=1)
                         await sim.delay(1e-9 * (write_ports + 3))
                     d = read_req_queues[i].popleft()
-                    assert (await m.read_resp[i].call(sim)).data == d
+                    assert (await m.read_resp[i].call(sim)).data.data_field == d
                     await self.random_wait(sim, reader_resp_rand)
 
             return process
@@ -230,7 +231,10 @@ class TestAsyncMemoryBank(TestCaseWithSimulator):
         data_width = 6
         m = SimpleTestCircuit(
             AsyncMemoryBank(
-                data_layout=[("data", data_width)], elem_count=max_addr, read_ports=read_ports, write_ports=write_ports
+                shape=make_layout(("data_field", data_width)),
+                depth=max_addr,
+                read_ports=read_ports,
+                write_ports=write_ports,
             ),
         )
 
@@ -243,7 +247,7 @@ class TestAsyncMemoryBank(TestCaseWithSimulator):
                 for cycle in range(test_count):
                     d = random.randrange(2**data_width)
                     a = random.randrange(max_addr)
-                    await m.write[i].call(sim, data={"data": d}, addr=a)
+                    await m.write[i].call(sim, data={"data_field": d}, addr=a)
                     await sim.delay(1e-9 * (i + 2))
                     data[a] = d
                     await self.random_wait(sim, writer_rand, min_cycle_cnt=1)
@@ -257,7 +261,7 @@ class TestAsyncMemoryBank(TestCaseWithSimulator):
                     d = await m.read[i].call(sim, addr=a)
                     await sim.delay(1e-9)
                     expected_d = data[a]
-                    assert d["data"] == expected_d
+                    assert d["data"]["data_field"] == expected_d
                     await self.random_wait(sim, reader_rand, min_cycle_cnt=1)
 
             return process
