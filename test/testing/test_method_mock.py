@@ -33,7 +33,18 @@ class DerivedMethodMockTestCircuit(SimpleMethodMockTestCircuit):
     pass
 
 
-@pytest.mark.parametrize("test_circuit", [SimpleMethodMockTestCircuit, DerivedMethodMockTestCircuit])
+class MroTestBase:
+    method: int
+    wrapper: int
+
+
+class MroMethodMockTestCircuit(SimpleMethodMockTestCircuit, MroTestBase):
+    pass
+
+
+@pytest.mark.parametrize(
+    "test_circuit", [SimpleMethodMockTestCircuit, DerivedMethodMockTestCircuit, MroMethodMockTestCircuit]
+)
 class TestMethodMock(TestCaseWithSimulator):
     async def process(self, sim: TestbenchContext):
         for _ in range(20):
