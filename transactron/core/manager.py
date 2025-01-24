@@ -18,7 +18,7 @@ from .body import Body, TBody, MBody
 from .transaction import Transaction, TransactionManagerKey
 from .method import Method
 from .tmodule import TModule
-from .schedulers import eager_deterministic_cc_scheduler
+from .schedulers import fast_eager_deterministic_cc_scheduler
 
 __all__ = ["TransactionManager", "TransactionModule", "TransactionComponent"]
 
@@ -83,7 +83,7 @@ class TransactionManager(Elaboratable):
     are never granted in the same clock cycle.
     """
 
-    def __init__(self, cc_scheduler: TransactionScheduler = eager_deterministic_cc_scheduler):
+    def __init__(self, cc_scheduler: TransactionScheduler = fast_eager_deterministic_cc_scheduler):
         self.transactions: list[Transaction] = []
         self.methods: list[Method] = []
         self.cc_scheduler = cc_scheduler

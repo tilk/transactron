@@ -19,7 +19,7 @@ from transactron.lib import Adapter, AdapterTrans
 from transactron.utils import Scheduler
 
 from transactron.core import Priority
-from transactron.core.schedulers import trivial_roundrobin_cc_scheduler, eager_deterministic_cc_scheduler
+from transactron.core.schedulers import *
 from transactron.core.manager import TransactionScheduler
 from transactron.utils.dependencies import DependencyContext, DependencyManager
 
@@ -127,6 +127,7 @@ class TransactionConflictTestCircuit(Elaboratable):
     [
         trivial_roundrobin_cc_scheduler,
         eager_deterministic_cc_scheduler,
+        fast_eager_deterministic_cc_scheduler,
     ],
 )
 class TestTransactionConflict(TestCaseWithSimulator):
