@@ -18,14 +18,14 @@ from .body import Body, TBody, MBody
 from .transaction import Transaction, TransactionManagerKey
 from .method import Method
 from .tmodule import TModule
-from .schedulers import fast_eager_deterministic_cc_scheduler
+from .schedulers import fast_eager_deterministic_cc_scheduler, _priority_order
 
 __all__ = ["TransactionManager", "TransactionModule", "TransactionComponent"]
 
 TransactionGraph: TypeAlias = Graph[TBody]
 TransactionGraphCC: TypeAlias = GraphCC[TBody]
 PriorityOrder: TypeAlias = dict[TBody, int]
-TransactionScheduler: TypeAlias = Callable[["MethodMap", TransactionGraph, TransactionGraphCC, PriorityOrder], Module]
+TransactionScheduler: TypeAlias = Callable[["MethodMap", TransactionGraph, TransactionGraphCC, TransactionGraph], Module]
 
 
 class MethodMap:
@@ -95,7 +95,7 @@ class TransactionManager(Elaboratable):
         self.methods.append(method)
 
     @staticmethod
-    def _conflict_graph(method_map: MethodMap) -> tuple[TransactionGraph, PriorityOrder]:
+    def _conflict_graph(method_map: MethodMap) -> tuple[TransactionGraph, TransactionGraph]:
         """_conflict_graph
 
         This function generates the graph of transaction conflicts. Conflicts
@@ -188,16 +188,7 @@ class TransactionManager(Elaboratable):
                     conflict = relation.conflict and not transactions_exclusive(trans_start, trans_end)
                     add_edge(trans_start, trans_end, relation.priority, conflict)
 
-        porder: PriorityOrder = {}
-
-        psorted: list[TBody] = list(
-            networkx.lexicographical_topological_sort(networkx.DiGraph(pgr).reverse(), key=lambda t: len(cgr[t]))
-        )
-
-        for k, transaction in enumerate(psorted):
-            porder[transaction] = k
-
-        return cgr, porder
+        return cgr, pgr
 
     @staticmethod
     def _method_enables(method_map: MethodMap) -> Mapping[TBody, Mapping[MBody, ValueLike]]:
@@ -345,7 +336,7 @@ class TransactionManager(Elaboratable):
             merge_manager = self._simultaneous()
 
             method_map = MethodMap(self.transactions)
-            cgr, porder = TransactionManager._conflict_graph(method_map)
+            cgr, pgr = TransactionManager._conflict_graph(method_map)
 
         m = Module()
         m._MustUse__silence = True  # type: ignore
@@ -382,16 +373,16 @@ class TransactionManager(Elaboratable):
                 m.d.comb += assign(method.data_in, method.combiner(m, method_args[method], runs), fields=AssignType.ALL)
 
         m.submodules._transactron_schedulers = ModuleConnector(
-            *[self.cc_scheduler(method_map, cgr, cc, porder) for cc in ccs]
+            *[self.cc_scheduler(method_map, cgr, cc, pgr) for cc in ccs]
         )
 
         if "TRANSACTRON_VERBOSE" in environ:
-            self.print_info(cgr, porder, ccs, method_map)
+            self.print_info(cgr, pgr, ccs, method_map)
 
         return m
 
     def print_info(
-        self, cgr: TransactionGraph, porder: PriorityOrder, ccs: list[GraphCC["TBody"]], method_map: MethodMap
+        self, cgr: TransactionGraph, pgr: TransactionGraph, ccs: list[GraphCC["TBody"]], method_map: MethodMap
     ):
         print("Transactron statistics")
         print(f"\tMethods: {len(method_map.methods)}")
@@ -403,6 +394,7 @@ class TransactionManager(Elaboratable):
         print("Transaction subgraphs")
         for cc in ccs:
             ccl = list(cc)
+            porder = _priority_order(pgr)
             ccl.sort(key=lambda t: porder[t])
             for t in ccl:
                 print(f"\t{t.name}")
