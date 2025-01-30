@@ -261,13 +261,21 @@ class TransactionManager(Elaboratable):
         simultaneous = set[frozenset[TBody]]()
 
         for elem in method_map.methods_and_transactions:
+            pruned_sim = False
             for sim_elem in elem.simultaneous_list:
+                if sim_elem not in method_map.methods_and_transactions:
+                    if sim_elem.independent_list:
+                        raise RuntimeError("Pruned method with independent list not supported")
+                    pruned_sim = True
+                    continue
                 for tr1, tr2 in product(method_map.transactions_for(elem), method_map.transactions_for(sim_elem)):
                     if tr1 in independents[tr2]:
                         raise RuntimeError(
                             f"Unsatisfiable simultaneity constraints for '{elem.name}' and '{sim_elem.name}'"
                         )
                     simultaneous.add(frozenset({tr1, tr2}))
+            if pruned_sim and elem in method_map.transactions:
+                elem.ready = Signal()
 
         # step 2: transitivity computation
         tr_simultaneous = set[frozenset[TBody]]()
