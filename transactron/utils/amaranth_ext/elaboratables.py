@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from typing import Literal, Optional, overload
 from collections.abc import Iterable
 from amaranth import *
+from amaranth import ValueCastable
 from amaranth.lib.data import ArrayLayout
 from amaranth_types import ShapeLike
 from transactron.utils._typing import HasElaborate, ModuleLike, ValueLike
@@ -608,5 +609,70 @@ class StableSelectingNetwork(Elaboratable):
             m.d.comb += self.outputs[i].eq(last_level[i])
 
         m.d.comb += self.output_cnt.eq(total_cnt)
+
+        return m
+
+
+class OneHotMux(Elaboratable):
+    """One-hot multiplexer.
+
+    If all select bits are 0, the `output` signal is set to `default_input`.
+    In the other case, the `output` signal is set to the input which
+    select bit is set. It is assumed that at most one `select` bit is set.
+
+    Attributes
+    ----------
+    inputs: Signal(ArrayLayout(shape, inputs_count)), in
+        Input signals.
+    select: Signal(inputs_count), in
+        Selection signal. When one of the select bits is set,
+        the corresponding input is assigned to `output`.
+    default_input: Signal(shape), in
+        Default input signal.
+    output: Signal(shape), out
+        Output signal. It is set to `default_input` or one of `inputs`
+        depending on `select`.
+    """
+
+    def __init__(self, shape: ShapeLike, inputs_count: int):
+        self.inputs = Signal(ArrayLayout(shape, inputs_count))
+        self.select = Signal(inputs_count)
+        self.default_input = Signal(shape)
+        self.output = Signal(shape)
+
+    @staticmethod
+    def create(m: ModuleLike, inputs: Iterable[tuple[ValueLike, ValueLike]], default_input: ValueLike) -> ValueLike:
+        """Syntax sugar for creating a `OneHotMux`.
+
+        Parameters
+        ----------
+        m: Module
+            Module to add the `OneHotMux` to.
+        default_input: ValueLike
+            Default input.
+        forward_inputs: Iterable[tuple[ValueLike, ValueLike]]
+            Select bits and corresponding inputs.
+        """
+        if isinstance(default_input, ValueCastable):
+            input_shape = default_input.shape()
+        else:
+            input_shape = Value.cast(default_input).shape()
+        inputs = list(inputs)
+        fw_net = OneHotMux(input_shape, len(inputs))
+        m.submodules += fw_net
+        m.d.comb += Value.cast(fw_net.default_input).eq(default_input)
+        for i, (sel_bit, input) in enumerate(inputs):
+            m.d.comb += fw_net.select[i].eq(sel_bit)
+            m.d.comb += Value.cast(fw_net.inputs[i]).eq(input)
+        return fw_net.output
+
+    def elaborate(self, platform):
+        m = Module()
+
+        for i in OneHotSwitchDynamic(m, self.select, default=True):
+            if i is None:
+                m.d.comb += Value.cast(self.output).eq(self.default_input)
+            else:
+                m.d.comb += Value.cast(self.output).eq(self.inputs[i])
 
         return m
