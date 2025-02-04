@@ -41,7 +41,7 @@ dev = [
 ]
 
 [project.scripts]
-tprof = "transactron.cmd.tprof:main"
+transactron-prof = "transactron.cmd.tprof:main"
 
 [tool.setuptools_scm]
 
