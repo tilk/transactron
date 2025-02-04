@@ -328,7 +328,7 @@ class TestNonexclusiveWrapper(TestCaseWithSimulator):
         wrappers = 2
         callers = 2
         iterations = 100
-        m = NonexclusiveWrapperTestCircuit(4, wrappers, callers)
+        m = NonexclusiveWrapperTestCircuit(iosize, wrappers, callers)
 
         def caller_process(i: int):
             async def process(sim: TestbenchContext):
