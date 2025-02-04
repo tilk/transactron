@@ -294,3 +294,58 @@ class MethodTryProductTestCircuit(Elaboratable):
         m.submodules.method = self.method = TestbenchIO(AdapterTrans(product.use(m)))
 
         return m
+
+
+class NonexclusiveWrapperTestCircuit(Elaboratable):
+    def __init__(self, iosize: int, wrappers: int, callers: int):
+        self.iosize = iosize
+        self.wrappers = wrappers
+        self.callers = callers
+        self.sources: list[list[TestbenchIO]] = []
+
+    def elaborate(self, platform):
+        m = TModule()
+
+        layout = data_layout(self.iosize)
+
+        m.submodules.target = self.target = TestbenchIO(Adapter.create(i=layout, o=layout))
+
+        for i in range(self.wrappers):
+            nonex = NonexclusiveWrapper(self.target.adapter.iface).use(m)
+            sources = []
+            self.sources.append(sources)
+
+            for j in range(self.callers):
+                m.submodules[f"source_{i}_{j}"] = source = TestbenchIO(AdapterTrans(nonex))
+                sources.append(source)
+
+        return m
+
+
+class TestNonexclusiveWrapper(TestCaseWithSimulator):
+    def test_nonexclusive_wrapper(self):
+        iosize = 4
+        wrappers = 2
+        callers = 2
+        iterations = 100
+        m = NonexclusiveWrapperTestCircuit(4, wrappers, callers)
+
+        def caller_process(i: int):
+            async def process(sim: TestbenchContext):
+                for _ in range(iterations):
+                    j = random.randrange(callers)
+                    data = random.randrange(2**iosize)
+                    ret = await m.sources[i][j].call(sim, data=data)
+                    assert ret.data == (data + 1) % (2**iosize)
+                    await self.random_wait_geom(sim, 0.5)
+
+            return process
+
+        @def_method_mock(lambda: m.target)
+        def target(data):
+            return {"data": data + 1}
+
+        with self.run_simulation(m) as sim:
+            self.add_mock(sim, target())
+            for i in range(wrappers):
+                sim.add_testbench(caller_process(i))
