@@ -5,8 +5,11 @@ import random
 from collections import deque
 from datetime import timedelta
 from hypothesis import given, settings, Phase
+import amaranth.lib.memory as memory
+import amaranth_types.memory as amemory
 from transactron.testing import *
 from transactron.lib.storage import *
+from transactron.utils.amaranth_ext.memory import MultiportXORMemory, MultiportILVTMemory
 from transactron.utils.transactron_helpers import make_layout
 
 
@@ -150,6 +153,7 @@ class TestMemoryBank(TestCaseWithSimulator):
     @pytest.mark.parametrize("transparent", [False, True])
     @pytest.mark.parametrize("read_ports", [1, 2])
     @pytest.mark.parametrize("write_ports", [1, 2])
+    @pytest.mark.parametrize("memory_type", [memory.Memory, MultiportXORMemory, MultiportILVTMemory])
     @pytest.mark.parametrize("shape,to_shape,from_shape", bank_shapes)
     def test_mem(
         self,
@@ -161,6 +165,7 @@ class TestMemoryBank(TestCaseWithSimulator):
         transparent: bool,
         read_ports: int,
         write_ports: int,
+        memory_type: amemory.AbstractMemoryConstructor[ShapeLike, Value],
         shape: ShapeLike,
         to_shape: Callable,
         from_shape: Callable,
@@ -174,11 +179,13 @@ class TestMemoryBank(TestCaseWithSimulator):
                 transparent=transparent,
                 read_ports=read_ports,
                 write_ports=write_ports,
+                memory_type=memory_type,
             ),
         )
 
         data: list[int] = [0 for _ in range(max_addr)]
         read_req_queues = [deque() for _ in range(read_ports)]
+        address_lock = [False] * max_addr
 
         random.seed(seed)
 
@@ -187,9 +194,19 @@ class TestMemoryBank(TestCaseWithSimulator):
                 for cycle in range(test_count):
                     d = random.randrange(2 ** Shape.cast(shape).width)
                     a = random.randrange(max_addr)
+
+                    # one address shouldn't be written by multiple ports at the same time
+                    while address_lock[a]:
+                        a = random.randrange(max_addr)
+                    address_lock[a] = True
+
                     await m.write[i].call(sim, data=to_shape(d), addr=a)
+
                     await sim.delay(1e-9 * (i + 2 if not transparent else i))
                     data[a] = d
+
+                    address_lock[a] = False
+
                     await self.random_wait(sim, writer_rand)
 
             return process
