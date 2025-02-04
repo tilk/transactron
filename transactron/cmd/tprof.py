@@ -1,19 +1,10 @@
-#!/usr/bin/env python3
-
 import argparse
-import sys
 import re
-from pathlib import Path
 from typing import Optional
 from collections.abc import Callable, Iterable
 from tabulate import tabulate
 from dataclasses import asdict
-
-topdir = Path(__file__).parent.parent
-sys.path.insert(0, str(topdir))
-
-
-from transactron.profiler import Profile, RunStat, RunStatNode  # noqa: E402
+from transactron.profiler import Profile, RunStat, RunStatNode
 
 
 def process_stat_tree(
