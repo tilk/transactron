@@ -278,7 +278,9 @@ class MultiportXORMemory(BaseMultiportMemory):
                 m.d.comb += [port.addr.eq(self.read_ports[idx].addr), port.en.eq(self.read_ports[idx].en)]
 
         for index, port in enumerate(self.read_ports):
-            m.d.comb += [port.data.eq(Mux(read_en_bypass[index], read_xors[index], port.data))]
+            sync_data = Signal.like(port.data)
+            m.d.sync += sync_data.eq(port.data)
+            m.d.comb += [port.data.eq(Mux(read_en_bypass[index], read_xors[index], sync_data))]
 
         return m
 
@@ -363,6 +365,8 @@ class MultiportILVTMemory(BaseMultiportMemory):
             ]
             new_data = OneHotMux.create(m, mux_inputs, bank_data)
 
-            m.d.comb += [read_port.data.eq(Mux(read_en_bypass, new_data, read_port.data))]
+            sync_data = Signal.like(read_port.data)
+            m.d.sync += sync_data.eq(read_port.data)
+            m.d.comb += [read_port.data.eq(Mux(read_en_bypass, new_data, sync_data))]
 
         return m
