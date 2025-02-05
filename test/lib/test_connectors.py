@@ -1,20 +1,17 @@
 import pytest
 import random
-from operator import and_
-from functools import reduce
 from typing import TypeAlias
+from collections import defaultdict
 
 from amaranth import *
 from transactron import *
 from transactron.utils._typing import MethodLayout
-from transactron.lib.adapters import Adapter
 from transactron.lib.connectors import *
 from transactron.testing.testbenchio import CallTrigger
 from transactron.testing import (
     SimpleTestCircuit,
     TestCaseWithSimulator,
     data_layout,
-    TestbenchIO,
     TestbenchContext,
 )
 
@@ -124,26 +121,16 @@ class TestPipe(TestFifoBase):
 
 
 class ManyToOneConnectTransTestCircuit(Elaboratable):
-    def __init__(self, count: int, lay: MethodLayout):
-        self.count = count
-        self.lay = lay
-        self.inputs: list[TestbenchIO] = []
+    inputs: Required[list[Method]]
+    output: Required[Method]
+
+    def __init__(self, count: int, layout: MethodLayout):
+        self.inputs = [Method(o=layout) for _ in range(count)]
+        self.output = Method(i=layout)
 
     def elaborate(self, platform):
         m = TModule()
-
-        get_results = []
-        for i in range(self.count):
-            input = TestbenchIO(Adapter.create(o=self.lay))
-            get_results.append(input.adapter.iface)
-            m.submodules[f"input_{i}"] = input
-            self.inputs.append(input)
-
-        # Create ManyToOneConnectTrans, which will serialize results from different inputs
-        output = TestbenchIO(Adapter.create(i=self.lay))
-        m.submodules.output = self.output = output
-        m.submodules.fu_arbitration = ManyToOneConnectTrans(get_results=get_results, put_result=output.adapter.iface)
-
+        m.submodules.fu_arbitration = ManyToOneConnectTrans(get_results=self.inputs, put_result=self.output)
         return m
 
 
@@ -153,13 +140,13 @@ class TestManyToOneConnectTrans(TestCaseWithSimulator):
         f2_size = 3
         self.lay = [("field1", f1_size), ("field2", f2_size)]
 
-        self.m = ManyToOneConnectTransTestCircuit(self.count, self.lay)
+        self.m = SimpleTestCircuit(ManyToOneConnectTransTestCircuit(self.count, self.lay))
         random.seed(14)
 
         self.inputs = []
         # Create list with info if we processed all data from inputs
         self.producer_end = [False for i in range(self.count)]
-        self.expected_output = {}
+        self.expected_output = defaultdict(int)
         self.max_wait = 4
 
         # Prepare random results for inputs
@@ -168,45 +155,30 @@ class TestManyToOneConnectTrans(TestCaseWithSimulator):
             input_size = random.randint(20, 30)
             for j in range(input_size):
                 t = (
-                    random.randint(0, 2**f1_size),
-                    random.randint(0, 2**f2_size),
+                    random.randrange(0, 2**f1_size),
+                    random.randrange(0, 2**f2_size),
                 )
                 data.append(t)
-                if t in self.expected_output:
-                    self.expected_output[t] += 1
-                else:
-                    self.expected_output[t] = 1
+                self.expected_output[t] += 1
             self.inputs.append(data)
 
     def generate_producer(self, i: int):
-        """
-        This is an helper function, which generates a producer process,
-        which will simulate an FU. Producer will insert in random intervals new
-        results to its output FIFO. This records will be next serialized by FUArbiter.
-        """
-
         async def producer(sim: TestbenchContext):
             inputs = self.inputs[i]
             for field1, field2 in inputs:
-                self.m.inputs[i].call_init(sim, field1=field1, field2=field2)
+                await self.m.inputs[i].call(sim, field1=field1, field2=field2)
                 await self.random_wait(sim, self.max_wait)
             self.producer_end[i] = True
 
         return producer
 
     async def consumer(self, sim: TestbenchContext):
-        # TODO: this test doesn't test anything, needs to be fixed!
-        while reduce(and_, self.producer_end, True):
-            result = await self.m.output.call_do(sim)
+        while not all(self.producer_end):
+            result = await self.m.output.call(sim)
 
-            assert result is not None
-
-            t = (result["field1"], result["field2"])
-            assert t in self.expected_output
-            if self.expected_output[t] == 1:
-                del self.expected_output[t]
-            else:
-                self.expected_output[t] -= 1
+            t = (result.field1, result.field2)
+            assert self.expected_output[t]
+            self.expected_output[t] -= 1
             await self.random_wait(sim, self.max_wait)
 
     @pytest.mark.parametrize("count", [1, 4])

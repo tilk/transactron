@@ -102,6 +102,8 @@ class TransactionBase(Owned, Protocol, Generic[_T]):
             The `Transaction`\\s or `Method`\\s to be executed simultaneously.
         """
         self.simultaneous_list += others
+        for other in others:
+            other.simultaneous_list.append(self)  # type: ignore
 
     def simultaneous_alternatives(self, *others: _T) -> None:
         """Adds exclusive simultaneity relations.
