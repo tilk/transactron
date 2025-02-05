@@ -5,6 +5,7 @@ from amaranth import *
 from transactron import *
 from transactron.lib.adapters import Adapter, AdapterTrans
 from transactron.lib.transformers import *
+from transactron.testing.testbenchio import CallTrigger
 from transactron.utils._typing import ModuleLike, MethodStruct, RecordDict
 from transactron.utils import ModuleConnector
 from transactron.testing import (
@@ -349,3 +350,17 @@ class TestNonexclusiveWrapper(TestCaseWithSimulator):
             self.add_mock(sim, target())
             for i in range(wrappers):
                 sim.add_testbench(caller_process(i))
+
+    def test_no_conflict(self):
+        m = NonexclusiveWrapperTestCircuit(1, 1, 2)
+
+        async def process(sim: TestbenchContext):
+            res1, res2 = await CallTrigger(sim).call(m.sources[0][0], data=1).call(m.sources[0][1], data=2).until_done()
+            assert res1 is not None and res2 is not None  # there was no conflict, however the result is undefined
+
+        @def_method_mock(lambda: m.target)
+        def target(data):
+            return {"data": data + 1}
+
+        with self.run_simulation(m) as sim:
+            sim.add_testbench(process)
