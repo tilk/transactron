@@ -191,7 +191,7 @@ class TransactionManager(Elaboratable):
         porder: PriorityOrder = {}
 
         psorted: list[TBody] = list(
-            networkx.lexicographical_topological_sort(networkx.DiGraph(pgr).reverse(), key=lambda t: -len(cgr[t]))
+            networkx.lexicographical_topological_sort(networkx.DiGraph(pgr).reverse(), key=lambda t: len(cgr[t]))
         )
 
         for k, transaction in enumerate(psorted):
