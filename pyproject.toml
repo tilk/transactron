@@ -41,6 +41,9 @@ dev = [
     "pre-commit == 2.16.0"
 ]
 
+[project.scripts]
+transactron-prof = "transactron.cmd.tprof:main"
+
 [tool.setuptools_scm]
 
 [tool.pyright]

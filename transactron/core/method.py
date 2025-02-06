@@ -325,8 +325,8 @@ class Method(TransactionBase["Transaction | Method"]):
 class Methods(Sequence[Method]):
     @type_self_add_1pos_kwargs_as(Method.__init__)
     def __init__(self, count: int, **kwargs):
-        if count <= 0:
-            raise ValueError("count should be at least 1")
+        if count < 0:
+            raise ValueError("count should be at least 0")
         _, owner_name = get_caller_class_name(default="$method")
         self.name = kwargs["name"] if "name" in kwargs else tracer.get_var_name(depth=2, default=owner_name)
         if "src_loc" not in kwargs:
@@ -334,14 +334,16 @@ class Methods(Sequence[Method]):
         if isinstance(kwargs["src_loc"], int):
             kwargs["src_loc"] += 1
         self._methods = [Method(**{**kwargs, "name": f"{self.name}{i}"}) for i in range(count)]
+        self._layout_in = from_method_layout(kwargs["i"] if "i" in kwargs else ())
+        self._layout_out = from_method_layout(kwargs["o"] if "o" in kwargs else ())
 
     @property
     def layout_in(self):
-        return self._methods[0].layout_in
+        return self._layout_in
 
     @property
     def layout_out(self):
-        return self._methods[0].layout_out
+        return self._layout_out
 
     def __call__(
         self, m: TModule, arg: Optional[AssignArg] = None, enable: ValueLike = C(1), /, **kwargs: AssignArg
