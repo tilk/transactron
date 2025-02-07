@@ -22,7 +22,7 @@ classifiers = [
 [project.optional-dependencies]
 dev = [
     # Linting
-    "pyright == 1.1.332",
+    "pyright == 1.1.393",
     "flake8 == 7.0.0",
     "black == 24.4.2",
     # Testing

@@ -1,4 +1,4 @@
-from typing import TypeVar, Type, Any
+from typing import Callable, TypeVar, Any
 
 from transactron.utils import make_hashable
 
@@ -24,9 +24,9 @@ class DependentCache:
     """
 
     def __init__(self):
-        self._depcache: dict[tuple[Type, Any], Type] = {}
+        self._depcache: dict[tuple[Callable, Any], Any] = {}
 
-    def get(self, cls: Type[T], **kwargs) -> T:
+    def get(self, cls: Callable[..., T], **kwargs) -> T:
         cache_key = make_hashable(kwargs)
         v = self._depcache.get((cls, cache_key), None)
         if v is None:
