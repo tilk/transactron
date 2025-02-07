@@ -1,6 +1,6 @@
 from amaranth import ShapeCastable, ShapeLike, Signal, unsigned
 from amaranth.lib.wiring import Signature, Flow, Member
-from amaranth_types import AbstractInterface, AbstractSignature
+from amaranth_types import AbstractInterface, AbstractSignature, FlatShapeLike
 
 from abc import ABCMeta
 from typing import TYPE_CHECKING, Generic, Mapping, Self, TypeVar, final, overload
@@ -32,12 +32,10 @@ class _ShapeTypingMeta(ABCMeta):
         # Amaranth ShapeCastable Signal creation rules
 
         @overload
-        def __call__(cls, shape: ShapeCastable[T]) -> T:
-            raise NotImplementedError
+        def __call__(cls, shape: ShapeCastable[T]) -> T: ...
 
         @overload
-        def __call__(cls, shape: ShapeLike = unsigned(1)) -> Signal:
-            raise NotImplementedError
+        def __call__(cls, shape: FlatShapeLike = unsigned(1)) -> Signal: ...
 
         def __call__(cls, shape: ShapeLike = unsigned(1)):
             raise NotImplementedError

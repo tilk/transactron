@@ -275,7 +275,7 @@ class TModule(ModuleLike, Elaboratable):
         return self.main_module._MustUse__silence
 
     @_MustUse__silence.setter
-    def _MustUse__silence(self, value: bool):  # noqa: N802
+    def _MustUse__silence(self, value: bool):  # type: ignore # noqa: N802
         self.main_module._MustUse__silence = value  # type: ignore
         self.avoiding_module._MustUse__silence = value  # type: ignore
         self.top_module._MustUse__silence = value  # type: ignore

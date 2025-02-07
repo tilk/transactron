@@ -7,7 +7,7 @@ import functools
 import inspect
 from contextlib import contextmanager, nullcontext
 from collections.abc import Callable
-from typing import TypeVar, Generic, Type, TypeGuard, Any, cast, TypeAlias, Optional
+from typing import TypeVar, Generic, TypeGuard, Any, cast, TypeAlias, Optional
 from amaranth import *
 from amaranth.sim import *
 from amaranth.sim._async import SimulatorContext
@@ -34,11 +34,11 @@ T = TypeVar("T")
 _T_nested_collection: TypeAlias = T | list["_T_nested_collection[T]"] | dict[str, "_T_nested_collection[T]"]
 
 
-def guard_nested_collection(cont: Any, t: Type[T]) -> TypeGuard[_T_nested_collection[T]]:
+def guard_nested_collection(cont: Any, *t: type[T]) -> TypeGuard[_T_nested_collection[T]]:
     if isinstance(cont, (list, dict)):
         if isinstance(cont, dict):
             cont = cont.values()
-        return all([guard_nested_collection(elem, t) for elem in cont])
+        return all([guard_nested_collection(elem, *t) for elem in cont])
     elif isinstance(cont, t):
         return True
     else:
@@ -98,7 +98,7 @@ class SimpleTestCircuit(Elaboratable, Generic[_T_HasElaborate]):
             hints.update(inspect.get_annotations(cls, eval_str=True))
 
         for name, attr in vars(self._dut).items():
-            if guard_nested_collection(attr, Method | Methods) and attr:
+            if guard_nested_collection(attr, Method, Methods) and attr:
                 if (
                     name in hints
                     and hasattr(hints[name], "__metadata__")
