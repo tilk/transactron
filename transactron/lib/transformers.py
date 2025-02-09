@@ -28,6 +28,7 @@ __all__ = [
     "Collector",
     "CatTrans",
     "ConnectAndMapTrans",
+    "NonexclusiveWrapper",
 ]
 
 
@@ -451,5 +452,29 @@ class ConnectAndMapTrans(Elaboratable):
             src_loc=self.src_loc,
         )
         m.submodules.connect = ConnectTrans(self.method1, transformer.method)
+
+        return m
+
+
+class NonexclusiveWrapper(Elaboratable, Transformer):
+    """Nonexclusive wrapper around a method.
+
+    Useful when you can assume, for external reasons, that a given method will
+    never be called more than once in a given clock cycle - even when the
+    call graph indicates it could.
+
+    Possible use case is unifying parallel pipelines with the same latency.
+    """
+
+    def __init__(self, target: Method):
+        self.target = target
+        self.method = Method.like(target)
+
+    def elaborate(self, platform):
+        m = TModule()
+
+        @def_method(m, self.method, nonexclusive=True)
+        def _(arg):
+            return self.target(m, arg)
 
         return m
