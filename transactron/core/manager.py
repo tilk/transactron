@@ -2,10 +2,10 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterable, Sequence, Collection, Mapping
 from typing import TypeAlias, Optional
 from os import environ
-from graphlib import TopologicalSorter
 from amaranth import *
 from amaranth.lib.wiring import Component, connect, flipped
 from itertools import chain, filterfalse, product
+import networkx
 
 from amaranth_types import AbstractComponent
 
@@ -190,7 +190,11 @@ class TransactionManager(Elaboratable):
 
         porder: PriorityOrder = {}
 
-        for k, transaction in enumerate(TopologicalSorter(pgr).static_order()):
+        psorted: list[TBody] = list(
+            networkx.lexicographical_topological_sort(networkx.DiGraph(pgr).reverse(), key=lambda t: len(cgr[t]))
+        )
+
+        for k, transaction in enumerate(psorted):
             porder[transaction] = k
 
         return cgr, porder
