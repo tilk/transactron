@@ -6,6 +6,8 @@ from amaranth.hdl import AlreadyElaborated
 from typing import Optional, Any, final
 from collections.abc import Iterable
 
+from transactron.utils.amaranth_ext.elaboratables import OneHotMux
+
 from .. import get_src_loc
 from amaranth_types.types import ShapeLike, ValueLike
 
@@ -276,7 +278,9 @@ class MultiportXORMemory(BaseMultiportMemory):
                 m.d.comb += [port.addr.eq(self.read_ports[idx].addr), port.en.eq(self.read_ports[idx].en)]
 
         for index, port in enumerate(self.read_ports):
-            m.d.comb += [port.data.eq(Mux(read_en_bypass[index], read_xors[index], port.data))]
+            sync_data = Signal.like(port.data)
+            m.d.sync += sync_data.eq(port.data)
+            m.d.comb += [port.data.eq(Mux(read_en_bypass[index], read_xors[index], sync_data))]
 
         return m
 
@@ -349,19 +353,20 @@ class MultiportILVTMemory(BaseMultiportMemory):
             m.d.sync += [read_en_bypass.eq(read_port.en), read_addr_bypass.eq(read_port.addr)]
 
             bank_data = Signal(self.shape)
-            bypass_data = Signal(self.shape)
-            bypass_en = Signal()
             with m.Switch(ilvt_read_ports[index].data):
                 for value in range(len(self.write_ports)):
                     with m.Case(value):
                         m.d.comb += [bank_data.eq(m.submodules[f"bank_{value}"].read_ports[index].data)]
 
-            for idx, write_port in enumerate(self.write_ports):
-                if write_port in read_port.transparent_for:
-                    with m.If((write_addr_bypass[idx] == read_addr_bypass) & write_en_bypass[idx]):
-                        m.d.comb += [bypass_en.eq(1), bypass_data.eq(write_data_bypass[idx])]
+            mux_inputs = [
+                ((write_addr_bypass[idx] == read_addr_bypass) & write_en_bypass[idx], write_data_bypass[idx])
+                for idx, write_port in enumerate(self.write_ports)
+                if write_port in read_port.transparent_for
+            ]
+            new_data = OneHotMux.create(m, mux_inputs, bank_data)
 
-            new_data = Mux(bypass_en, bypass_data, bank_data)
-            m.d.comb += [read_port.data.eq(Mux(read_en_bypass, new_data, read_port.data))]
+            sync_data = Signal.like(read_port.data)
+            m.d.sync += sync_data.eq(read_port.data)
+            m.d.comb += [read_port.data.eq(Mux(read_en_bypass, new_data, sync_data))]
 
         return m

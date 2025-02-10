@@ -308,10 +308,10 @@ class TestTransactionPriorities(TestCaseWithSimulator):
     def test_unsatisfiable(self, circuit: type[PriorityTestCircuit], priority: Priority):
         m = circuit(priority, True)
 
-        import graphlib
+        import networkx
 
         if priority != Priority.UNDEFINED:
-            cm = pytest.raises(graphlib.CycleError)
+            cm = pytest.raises(networkx.NetworkXUnfeasible)
         else:
             cm = contextlib.nullcontext()
 
