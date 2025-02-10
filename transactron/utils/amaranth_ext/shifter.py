@@ -2,7 +2,7 @@ from amaranth import *
 from amaranth.hdl import ValueCastable
 from collections.abc import Sequence
 from typing import Optional, TypeVar, cast, overload
-from amaranth_types.types import ValueLike
+from amaranth_types import ValueLike, FlatValueLike
 from .functions import shape_of, const_of
 
 
@@ -195,12 +195,12 @@ def generic_shift_vec_right(
 
 @overload
 def generic_shift_vec_right(
-    data1: Sequence[ValueLike], data2: Sequence[ValueLike], offset: ValueLike
+    data1: Sequence[FlatValueLike], data2: Sequence[FlatValueLike], offset: ValueLike
 ) -> Sequence[Value]: ...
 
 
 def generic_shift_vec_right(
-    data1: Sequence[ValueLike | ValueCastable], data2: Sequence[ValueLike | ValueCastable], offset: ValueLike
+    data1: Sequence[ValueLike], data2: Sequence[ValueLike], offset: ValueLike
 ) -> Sequence[Value | ValueCastable]:
     """Generic right shift function for bit vectors and complex data.
 
@@ -213,9 +213,9 @@ def generic_shift_vec_right(
 
     Parameters
     ----------
-    data1 : Sequence[ValueLike | ValueCastable]
+    data1 : Sequence[ValueLike]
         The sequence of data to be shifted.
-    data2 : Sequence[ValueLike | ValueCastable]
+    data2 : Sequence[ValueLike]
         The sequence of data used to fill space after shifting.
     offset : ValueLike
         The number of entries to shift.
@@ -257,12 +257,12 @@ def generic_shift_vec_left(
 
 @overload
 def generic_shift_vec_left(
-    data1: Sequence[ValueLike], data2: Sequence[ValueLike], offset: ValueLike
+    data1: Sequence[FlatValueLike], data2: Sequence[FlatValueLike], offset: ValueLike
 ) -> Sequence[Value]: ...
 
 
 def generic_shift_vec_left(
-    data1: Sequence[ValueLike | ValueCastable], data2: Sequence[ValueLike | ValueCastable], offset: ValueLike
+    data1: Sequence[ValueLike], data2: Sequence[ValueLike], offset: ValueLike
 ) -> Sequence[Value | ValueCastable]:
     """Generic left shift function for bit vectors and complex data.
 
@@ -275,9 +275,9 @@ def generic_shift_vec_left(
 
     Parameters
     ----------
-    data1 : Sequence[ValueLike | ValueCastable]
+    data1 : Sequence[ValueLike]
         The sequence of data to be shifted.
-    data2 : Sequence[ValueLike | ValueCastable]
+    data2 : Sequence[ValueLike]
         The sequence of data used to fill space after shifting.
     offset : ValueLike
         The number of entries to shift.
@@ -287,7 +287,7 @@ def generic_shift_vec_left(
     Sequence[Value | ValueCastable]
         The shifted sequence, the same length as `data1`.
     """
-    return list(reversed(generic_shift_vec_right(list(reversed(data1)), list(reversed(data2)), offset)))
+    return list(reversed(generic_shift_vec_right(list(reversed(data1)), list(reversed(data2)), offset)))  # type: ignore
 
 
 @overload
@@ -298,14 +298,14 @@ def shift_vec_right(
 
 @overload
 def shift_vec_right(
-    data: Sequence[ValueLike], offset: ValueLike, placeholder: Optional[ValueLike]
+    data: Sequence[FlatValueLike], offset: ValueLike, placeholder: Optional[ValueLike]
 ) -> Sequence[Value]: ...
 
 
 def shift_vec_right(
-    data: Sequence[ValueLike | ValueCastable],
+    data: Sequence[ValueLike],
     offset: ValueLike,
-    placeholder: Optional[ValueLike | ValueCastable] = None,
+    placeholder: Optional[ValueLike] = None,
 ) -> Sequence[Value | ValueCastable]:
     """Right shift function for bit vectors and complex data.
 
@@ -315,11 +315,11 @@ def shift_vec_right(
 
     Parameters
     ----------
-    data : Sequence[ValueLike | ValueCastable]
+    data : Sequence[ValueLike]
         The sequence of data to be shifted.
     offset : ValueLike
         The number of entries to shift.
-    placeholder : ValueLike | ValueCastable, optional
+    placeholder : ValueLike, optional
         The data used to fill space after shifting.
 
     Returns
@@ -333,7 +333,7 @@ def shift_vec_right(
             placeholder = C(0, shape)
         else:
             placeholder = cast(ValueLike, shape.from_bits(0))
-    return generic_shift_vec_right(data, [placeholder] * len(data), offset)
+    return generic_shift_vec_right(data, [placeholder] * len(data), offset)  # type: ignore
 
 
 @overload
@@ -344,14 +344,14 @@ def shift_vec_left(
 
 @overload
 def shift_vec_left(
-    data: Sequence[ValueLike], offset: ValueLike, placeholder: Optional[ValueLike]
+    data: Sequence[FlatValueLike], offset: ValueLike, placeholder: Optional[FlatValueLike]
 ) -> Sequence[Value]: ...
 
 
 def shift_vec_left(
-    data: Sequence[ValueLike | ValueCastable],
+    data: Sequence[ValueLike],
     offset: ValueLike,
-    placeholder: Optional[ValueLike | ValueCastable] = None,
+    placeholder: Optional[ValueLike] = None,
 ) -> Sequence[Value | ValueCastable]:
     """Left shift function for bit vectors and complex data.
 
@@ -361,11 +361,11 @@ def shift_vec_left(
 
     Parameters
     ----------
-    data : Sequence[ValueLike | ValueCastable]
+    data : Sequence[ValueLike]
         The sequence of data to be shifted.
     offset : ValueLike
         The number of entries to shift.
-    placeholder : ValueLike | ValueCastable, optional
+    placeholder : ValueLike, optional
         The data used to fill space after shifting.
 
     Returns
@@ -375,7 +375,7 @@ def shift_vec_left(
     """
     if placeholder is None:
         placeholder = cast(ValueLike, const_of(0, shape_of(data[0])))
-    return generic_shift_vec_left(data, [placeholder] * len(data), offset)
+    return generic_shift_vec_left(data, [placeholder] * len(data), offset)  # type: ignore
 
 
 @overload
@@ -383,10 +383,10 @@ def rotate_vec_right(data: Sequence[_T_ValueCastable], offset: ValueLike) -> Seq
 
 
 @overload
-def rotate_vec_right(data: Sequence[ValueLike], offset: ValueLike) -> Sequence[Value]: ...
+def rotate_vec_right(data: Sequence[FlatValueLike], offset: ValueLike) -> Sequence[Value]: ...
 
 
-def rotate_vec_right(data: Sequence[ValueLike | ValueCastable], offset: ValueLike) -> Sequence[Value | ValueCastable]:
+def rotate_vec_right(data: Sequence[ValueLike], offset: ValueLike) -> Sequence[Value | ValueCastable]:
     """Right rotate function for bit vectors and complex data.
 
     Given `data` which is a sequence of `ValueLike` or `ValueCastable`, rotate
@@ -395,7 +395,7 @@ def rotate_vec_right(data: Sequence[ValueLike | ValueCastable], offset: ValueLik
 
     Parameters
     ----------
-    data : Sequence[ValueLike | ValueCastable]
+    data : Sequence[ValueLike]
         The sequence of data to be rotated.
     offset : ValueLike
         The number of entries to rotate.
@@ -405,7 +405,7 @@ def rotate_vec_right(data: Sequence[ValueLike | ValueCastable], offset: ValueLik
     Sequence[Value | ValueCastable]
         The rotated sequence, the same length as `data`.
     """
-    return generic_shift_vec_right(data, data, offset)
+    return generic_shift_vec_right(data, data, offset)  # type: ignore
 
 
 @overload
@@ -413,10 +413,10 @@ def rotate_vec_left(data: Sequence[_T_ValueCastable], offset: ValueLike) -> Sequ
 
 
 @overload
-def rotate_vec_left(data: Sequence[ValueLike], offset: ValueLike) -> Sequence[Value]: ...
+def rotate_vec_left(data: Sequence[FlatValueLike], offset: ValueLike) -> Sequence[Value]: ...
 
 
-def rotate_vec_left(data: Sequence[ValueLike | ValueCastable], offset: ValueLike) -> Sequence[Value | ValueCastable]:
+def rotate_vec_left(data: Sequence[ValueLike], offset: ValueLike) -> Sequence[Value | ValueCastable]:
     """Left rotate function for bit vectors and complex data.
 
     Given `data` which is a sequence of `ValueLike` or `ValueCastable`, rotate
@@ -425,7 +425,7 @@ def rotate_vec_left(data: Sequence[ValueLike | ValueCastable], offset: ValueLike
 
     Parameters
     ----------
-    data : Sequence[ValueLike | ValueCastable]
+    data : Sequence[ValueLike]
         The sequence of data to be rotated.
     offset : ValueLike
         The number of entries to rotate.
@@ -435,4 +435,4 @@ def rotate_vec_left(data: Sequence[ValueLike | ValueCastable], offset: ValueLike
     Sequence[Value | ValueCastable]
         The rotated sequence, the same length as `data`.
     """
-    return generic_shift_vec_left(data, data, offset)
+    return generic_shift_vec_left(data, data, offset)  # type: ignore

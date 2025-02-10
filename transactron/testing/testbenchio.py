@@ -94,7 +94,7 @@ class CallTrigger:
             if all(res is not None for res in results):
                 return results
 
-    def __await__(self) -> Generator:
+    def __await__(self) -> Generator[Any, Any, tuple]:
         only_calls = [t for t in self.calls_and_values if isinstance(t, tuple)]
         only_values = [t for t in self.calls_and_values if not isinstance(t, tuple)]
 

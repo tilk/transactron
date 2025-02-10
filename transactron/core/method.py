@@ -4,7 +4,7 @@ import enum
 from transactron.utils import *
 from amaranth import *
 from amaranth import tracer
-from typing import TYPE_CHECKING, Annotated, Optional, Iterator, TypeAlias, TypeVar, Unpack
+from typing import TYPE_CHECKING, Annotated, Optional, Iterator, TypeAlias, TypeVar, Unpack, overload
 from .transaction_base import *
 from contextlib import contextmanager
 from transactron.utils.assign import AssignArg
@@ -352,10 +352,16 @@ class Methods(Sequence[Method]):
             raise RuntimeError("calling Methods only allowed when count=1")
         return self._methods[0](m, arg, enable, **kwargs)
 
-    def __getitem__(self, key: int):
+    @overload
+    def __getitem__(self, key: int) -> Method: ...
+
+    @overload
+    def __getitem__(self, key: slice) -> Sequence[Method]: ...
+
+    def __getitem__(self, key: int | slice) -> Method | Sequence[Method]:
         return self._methods[key]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._methods)
 
     def debug_signals(self) -> SignalBundle:

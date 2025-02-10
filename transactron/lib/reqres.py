@@ -1,4 +1,6 @@
 from amaranth import *
+
+from transactron.utils.transactron_helpers import from_method_layout
 from ..core import *
 from ..utils import SrcLoc, get_src_loc, MethodLayout
 from .connectors import Forwarder
@@ -63,8 +65,8 @@ class ArgumentsToResultsZipper(Elaboratable):
             Alternatively, the source location to use instead of the default.
         """
         self.src_loc = get_src_loc(src_loc)
-        self.results_layout = results_layout
-        self.args_layout = args_layout
+        self.results_layout = from_method_layout(results_layout)
+        self.args_layout = from_method_layout(args_layout)
         self.output_layout = [("args", self.args_layout), ("results", results_layout)]
 
         self.peek_arg = Method(o=self.args_layout, src_loc=self.src_loc)

@@ -1,6 +1,6 @@
 from collections.abc import Iterable, Mapping
 from ._typing import ShapeLike, MethodLayout
-from typing import Any, Sized
+from typing import Any, Hashable, Sized
 from statistics import fmean
 from amaranth.lib.data import StructLayout
 
@@ -23,11 +23,11 @@ def layout_subset(layout: StructLayout, *, fields: set[str]) -> StructLayout:
     return StructLayout({item: value for item, value in layout.members.items() if item in fields})
 
 
-def make_hashable(val):
+def make_hashable(val) -> Hashable:
     if isinstance(val, Mapping):
         return frozenset(((k, make_hashable(v)) for k, v in val.items()))
     elif isinstance(val, Iterable):
-        return (make_hashable(v) for v in val)
+        return tuple(make_hashable(v) for v in val)
     else:
         return val
 

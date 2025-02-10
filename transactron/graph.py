@@ -4,7 +4,7 @@ Utilities for extracting dependency graphs from Amaranth designs.
 
 from enum import IntFlag
 from collections import defaultdict
-from typing import Literal, Optional, Protocol
+from typing import Literal, Optional, Protocol, overload
 
 from amaranth import Elaboratable, Fragment
 from .tracing import TracingFragment
@@ -113,6 +113,12 @@ class OwnershipGraph:
         owner_id = id(obj.owner)
         hier = self.hier[owner_id]
         return f"{hier}.{name}"
+
+    @overload
+    def prune(self, owner: None) -> None: ...
+
+    @overload
+    def prune(self, owner: int) -> bool: ...
 
     def prune(self, owner: Optional[int] = None):
         """

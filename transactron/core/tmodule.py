@@ -271,11 +271,11 @@ class TModule(ModuleLike, Elaboratable):
         return self.path_builder.build_ctrl_path()
 
     @property
-    def _MustUse__silence(self):  # noqa: N802
+    def _MustUse__silence(self) -> bool:  # type: ignore # noqa: N802
         return self.main_module._MustUse__silence
 
     @_MustUse__silence.setter
-    def _MustUse__silence(self, value):  # noqa: N802
+    def _MustUse__silence(self, value: bool):  # type: ignore # noqa: N802
         self.main_module._MustUse__silence = value  # type: ignore
         self.avoiding_module._MustUse__silence = value  # type: ignore
         self.top_module._MustUse__silence = value  # type: ignore

@@ -45,8 +45,8 @@ __all__ = [
 # Internal Coreblocks types
 SignalBundle: TypeAlias = Signal | Record | View | Iterable["SignalBundle"] | Mapping[str, "SignalBundle"]
 LayoutListField: TypeAlias = tuple[str, "ShapeLike | LayoutList"]
-LayoutList: TypeAlias = list[LayoutListField]
-LayoutIterable: TypeAlias = Iterable[LayoutListField]
+LayoutList: TypeAlias = list["LayoutListField"]
+LayoutIterable: TypeAlias = Iterable["LayoutListField"]
 MethodLayout: TypeAlias = StructLayout | LayoutIterable
 MethodStruct: TypeAlias = "View[StructLayout]"
 

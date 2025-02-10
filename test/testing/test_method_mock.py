@@ -38,7 +38,7 @@ class MroTestBase:
     wrapper: int
 
 
-class MroMethodMockTestCircuit(SimpleMethodMockTestCircuit, MroTestBase):
+class MroMethodMockTestCircuit(SimpleMethodMockTestCircuit, MroTestBase):  # type: ignore
     pass
 
 

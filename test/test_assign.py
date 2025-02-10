@@ -122,7 +122,7 @@ class TestAssign:
     def test_wrong_bits(self):
         with pytest.raises(ValueError):
             list(assign(self.buildl(self.mk, layout_a), self.buildr(self.mk, layout_a_alt)))
-        if self.mk.__wrapped__ != mkproxy:  # Arrays are troublesome and defeat some checks
+        if self.mk.__wrapped__ != mkproxy:  # type: ignore # Arrays are troublesome and defeat some checks
             with pytest.raises(ValueError):
                 list(assign(self.buildl(self.mk, layout_a), self.buildr(self.mk, layout_a_enum)))
 
