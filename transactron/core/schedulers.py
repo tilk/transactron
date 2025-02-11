@@ -1,5 +1,5 @@
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from amaranth import *
 from typing import TYPE_CHECKING, Generic, TypeAlias, TypeVar
@@ -29,12 +29,31 @@ class Box(Generic[_T]):
     item: _T
 
 
-Clique: TypeAlias = Box[list[_T]]
-SCC: TypeAlias = Box[set[_T]]
+BGroup: TypeAlias = Box[set[_T]]
 
 
 def trailing_one(data: Value):
     return Cat(b & ~Cat(data[:i]).any() for i, b in enumerate(iter(data)))
+
+
+def induced_group_graph(gr: Graph[_T], groups: Iterable[set[_T]]) -> Graph[BGroup[_T]]:
+    b_groups = list(map(Box, groups))
+
+    cliques_for: defaultdict[_T, set[BGroup[_T]]] = defaultdict(set)
+    for clique in b_groups:
+        for t in clique.item:
+            cliques_for[t].add(clique)
+
+    cpgr: Graph[BGroup[_T]] = Graph()
+    for clique in b_groups:
+        cpgr[clique] = set()
+        for t in clique.item:
+            for t2 in gr[t]:
+                for clique2 in cliques_for[t2]:
+                    if clique != clique2:
+                        cpgr[clique].add(clique2)
+
+    return cpgr
 
 
 def fast_eager_deterministic_cc_scheduler(
@@ -43,51 +62,20 @@ def fast_eager_deterministic_cc_scheduler(
     m = Module()
 
     subgr = {t: ts for t, ts in gr.items() if t in cc}
-    cliques: list[Clique[TBody]] = list(map(Box, networkx.find_cliques(networkx.Graph(subgr))))
+    cliques: list[set[TBody]] = list(map(set, networkx.find_cliques(networkx.Graph(subgr))))
+    cpgr = induced_group_graph(pgr, cliques)
 
-    print(cliques)
+    cpgr_sccs: list[set[BGroup[TBody]]] = list(networkx.strongly_connected_components(networkx.DiGraph(cpgr)))
+    cspgr = induced_group_graph(cpgr, cpgr_sccs)
 
     porder = _priority_order(pgr, key=lambda t: len(gr[t]))
-
-    cliques_for: defaultdict[TBody, set[Clique[TBody]]] = defaultdict(set)
-    for clique in cliques:
-        for t in clique.item:
-            cliques_for[t].add(clique)
-
-    cpgr: Graph[Clique[TBody]] = Graph()
-    for clique in cliques:
-        cpgr[clique] = set()
-        for t in clique.item:
-            for t2 in pgr[t]:
-                for clique2 in cliques_for[t2]:
-                    if clique != clique2:
-                        cpgr[clique].add(clique2)
-
-    print(cpgr)
-
-    cpgr_sccs: list[SCC[Clique[TBody]]] = list(map(Box, networkx.strongly_connected_components(networkx.DiGraph(cpgr))))
-
-    # TODO: identical code, factor out
-    sccs_for: defaultdict[Clique[TBody], set[SCC[Clique[TBody]]]] = defaultdict(set)
-    for scc in cpgr_sccs:
-        for clique in scc.item:
-            sccs_for[clique].add(scc)
-
-    cspgr: Graph[SCC[Clique[TBody]]] = Graph()
-    for scc in cpgr_sccs:
-        cspgr[scc] = set()
-        for clique in scc.item:
-            for clique2 in cpgr[clique]:
-                for scc2 in sccs_for[clique2]:
-                    if scc != scc2:
-                        cspgr[scc].add(scc2)
-
     sccporder = _priority_order(cspgr, key=lambda t: 0)  # TODO
 
-    cpgr_sccs.sort(key=lambda ts: sccporder[ts])
+    sorted_sccs = list(cspgr.keys())
+    sorted_sccs.sort(key=lambda ts: sccporder[ts])
 
     previous: set[TBody] = set()
-    for scc in cpgr_sccs:
+    for scc in sorted_sccs:
         ts = set.union(*(set(c.item) for c in scc.item))
         ts = [t for t in ts if t not in previous]
         ts.sort(key=lambda t: porder[t])
