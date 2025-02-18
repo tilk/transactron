@@ -224,9 +224,9 @@ class TransactionManager(Elaboratable):
         runs = defaultdict[MBody, list[Value]](list)
 
         for source in method_map.methods_and_transactions:
-            for method, (arg, _) in source.method_uses.items():
+            for method, (arg, enable) in source.method_uses.items():
                 args[method._body].append(arg)
-                runs[method._body].append(source.run)
+                runs[method._body].append(source.run & enable)
 
         return (args, runs)
 
