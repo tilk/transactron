@@ -10,7 +10,7 @@ class MinValueCircuit(Elaboratable):
 
     def elaborate(self, platform):
         m = Module()
-        
+
         m.d.comb += self.output.eq(min_value(m, self.inputs))
 
         return m

@@ -17,7 +17,7 @@ __all__ = [
     "flatten_signals",
     "shape_of",
     "const_of",
-    "min_value"
+    "min_value",
 ]
 
 
