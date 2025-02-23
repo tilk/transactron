@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
+from amaranth.lib.data import StructLayout
 from dataclasses_json import dataclass_json
-from typing import Optional, Type
+from typing import Optional, Type, TypeVar
 from abc import ABC
 from enum import Enum
 
@@ -8,8 +9,10 @@ from amaranth import *
 from amaranth.utils import bits_for, ceil_log2, exact_log2
 
 from transactron.utils import ValueLike, OneHotSwitchDynamic, SignalBundle
-from transactron import Method, def_method, TModule
+from transactron import Method, Methods, def_method, def_methods, TModule
 from transactron.lib import FIFO, AsyncMemoryBank, logging
+from transactron.utils._typing import MethodStruct
+from transactron.utils.amaranth_ext.functions import popcount
 from transactron.utils.dependencies import ListKey, DependencyContext, SimpleKey
 from transactron.utils.transactron_helpers import make_layout
 
@@ -25,6 +28,9 @@ __all__ = [
     "HardwareMetricsManager",
     "HwMetricsEnabledKey",
 ]
+
+
+_T_Method = TypeVar("_T_Method", Method, Methods)
 
 
 @dataclass_json
@@ -176,6 +182,17 @@ class HwMetric(ABC, MetricModel):
     def metrics_enabled(self) -> bool:
         return DependencyContext.get().get_dependency(HwMetricsEnabledKey())
 
+    def wrap_method(self, method: _T_Method) -> _T_Method:
+        if not self.metrics_enabled():
+            def dummy(*args, **kwargs) -> MethodStruct:
+                return Signal(StructLayout({}))
+            if isinstance(method, Method):
+                method.__call__ = dummy
+            else:
+                for m in method:
+                    m.__call__ = dummy
+        return method
+
     # To restore hashability lost by dataclass subclassing
     def __hash__(self):
         return object.__hash__(self)
@@ -187,7 +204,7 @@ class HwCounter(Elaboratable, HwMetric):
     The most basic hardware metric that can just increase its value.
     """
 
-    def __init__(self, fully_qualified_name: str, description: str = "", *, width_bits: int = 32):
+    def __init__(self, fully_qualified_name: str, description: str = "", *, width_bits: int = 32, ways: int = 1):
         """
         Parameters
         ----------
@@ -197,6 +214,8 @@ class HwCounter(Elaboratable, HwMetric):
             A human-readable description of the metric's functionality.
         width_bits: int
             The bit-width of the register. Defaults to 32 bits.
+        ways: int
+            The number of users of this counter.
         """
 
         super().__init__(fully_qualified_name, description)
@@ -205,7 +224,7 @@ class HwCounter(Elaboratable, HwMetric):
 
         self.add_registers([self.count])
 
-        self._incr = Method()
+        self.incr = self.wrap_method(Methods(ways))
 
     def elaborate(self, platform):
         if not self.metrics_enabled():
@@ -213,28 +232,27 @@ class HwCounter(Elaboratable, HwMetric):
 
         m = TModule()
 
-        @def_method(m, self._incr)
-        def _():
-            m.d.sync += self.count.value.eq(self.count.value + 1)
+        runs = Signal(len(self.incr))
+
+        @def_methods(m, self.incr)
+        def _(k: int):
+            m.d.comb += runs[k].eq(1)
+
+        m.d.sync += self.count.value.eq(self.count.value + popcount(runs))
 
         return m
 
-    def incr(self, m: TModule, *, cond: ValueLike = C(1)):
-        """
-        Increases the value of the counter by 1.
+    """
+    Increases the value of the counter by 1.
 
-        Should be called in the body of either a transaction or a method.
+    Should be called in the body of either a transaction or a method.
 
-        Parameters
-        ----------
-        m: TModule
-            Transactron module
-        """
-        if not self.metrics_enabled():
-            return
-
-        with m.If(cond):
-            self._incr(m)
+    Parameters
+    ----------
+    m: TModule
+        Transactron module
+    """
+    incr: Methods
 
 
 class TaggedCounter(Elaboratable, HwMetric):
@@ -265,6 +283,7 @@ class TaggedCounter(Elaboratable, HwMetric):
         *,
         tags: range | Type[Enum] | list[int],
         registers_width: int = 32,
+        ways: int = 1
     ):
         """
         Parameters
@@ -277,6 +296,8 @@ class TaggedCounter(Elaboratable, HwMetric):
             Tag values.
         registers_width: int
             Width of the underlying registers. Defaults to 32 bits.
+        ways: int
+            The number of users of this counter.
         """
 
         super().__init__(fully_qualified_name, description)
@@ -301,7 +322,7 @@ class TaggedCounter(Elaboratable, HwMetric):
             if 2**log != value:
                 self.one_hot = False
 
-        self._incr = Method(i=[("tag", Shape(self.tag_width, signed=negative_values))])
+        self.incr = self.wrap_method(Methods(ways, i=[("tag", Shape(self.tag_width, signed=negative_values))]))
 
         self.counters: dict[int, HwMetricRegister] = {}
         for tag_value, name in counters_meta:
@@ -322,7 +343,7 @@ class TaggedCounter(Elaboratable, HwMetric):
 
         m = TModule()
 
-        @def_method(m, self._incr)
+        @def_method(m, self.incr)
         def _(tag):
             if self.one_hot:
                 sorted_tags = sorted(list(self.counters.keys()))
@@ -336,26 +357,21 @@ class TaggedCounter(Elaboratable, HwMetric):
 
         return m
 
-    def incr(self, m: TModule, tag: ValueLike, *, cond: ValueLike = C(1)):
-        """
-        Increases the counter of a given tag by 1.
+    """
+    Increases the counter of a given tag by 1.
 
-        Should be called in the body of either a transaction or a method.
+    Should be called in the body of either a transaction or a method.
 
-        Parameters
-        ----------
-        m: TModule
-            Transactron module
-        tag: ValueLike
-            The tag of the counter.
-        cond: ValueLike
-            When set to high, the counter will be increased. By default set to high.
-        """
-        if not self.metrics_enabled():
-            return
-
-        with m.If(cond):
-            self._incr(m, tag)
+    Parameters
+    ----------
+    m: TModule
+        Transactron module
+    tag: ValueLike
+        The tag of the counter.
+    cond: ValueLike
+        When set to high, the counter will be increased. By default set to high.
+    """
+    incr: Methods
 
 
 class HwExpHistogram(Elaboratable, HwMetric):
