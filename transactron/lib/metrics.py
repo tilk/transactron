@@ -179,11 +179,13 @@ class HwMetric(ABC, MetricModel):
             self.regs[reg.name] = reg
             self.signals[reg.name] = reg.value
 
-    def metrics_enabled(self) -> bool:
+    @staticmethod
+    def metrics_enabled() -> bool:
         return DependencyContext.get().get_dependency(HwMetricsEnabledKey())
 
-    def wrap_method(self, method: _T_Method) -> _T_Method:
-        if not self.metrics_enabled():
+    @staticmethod
+    def wrap_method(method: _T_Method) -> _T_Method:
+        if not HwMetric.metrics_enabled():
             def dummy(*args, **kwargs) -> MethodStruct:
                 return Signal(StructLayout({}))
             if isinstance(method, Method):
@@ -242,6 +244,7 @@ class HwCounter(Elaboratable, HwMetric):
 
         return m
 
+    incr: Methods
     """
     Increases the value of the counter by 1.
 
@@ -252,7 +255,6 @@ class HwCounter(Elaboratable, HwMetric):
     m: TModule
         Transactron module
     """
-    incr: Methods
 
 
 class TaggedCounter(Elaboratable, HwMetric):
@@ -343,20 +345,27 @@ class TaggedCounter(Elaboratable, HwMetric):
 
         m = TModule()
 
-        @def_method(m, self.incr)
-        def _(tag):
+        runs: dict[int, Signal] = {}
+        for tag_value in self.counters.keys():
+            runs[tag_value] = Signal(len(self.incr))
+
+        @def_methods(m, self.incr)
+        def _(k: int, tag):
             if self.one_hot:
                 sorted_tags = sorted(list(self.counters.keys()))
                 for i in OneHotSwitchDynamic(m, tag):
-                    counter = self.counters[sorted_tags[i]]
-                    m.d.sync += counter.value.eq(counter.value + 1)
+                    m.d.comb += runs[sorted_tags[i]][k].eq(1)
             else:
-                for tag_value, counter in self.counters.items():
+                for tag_value in self.counters.keys():
                     with m.If(tag == tag_value):
-                        m.d.sync += counter.value.eq(counter.value + 1)
+                        m.d.comb += runs[tag_value][k].eq(1)
+        
+        for tag_value, counter in self.counters.items():
+            m.d.sync += counter.value.eq(counter.value + popcount(runs[tag_value]))
 
         return m
 
+    incr: Methods
     """
     Increases the counter of a given tag by 1.
 
@@ -371,7 +380,6 @@ class TaggedCounter(Elaboratable, HwMetric):
     cond: ValueLike
         When set to high, the counter will be increased. By default set to high.
     """
-    incr: Methods
 
 
 class HwExpHistogram(Elaboratable, HwMetric):
@@ -395,6 +403,7 @@ class HwExpHistogram(Elaboratable, HwMetric):
         bucket_count: int,
         sample_width: int = 32,
         registers_width: int = 32,
+        ways: int = 1
     ):
         """
         Parameters
@@ -406,13 +415,15 @@ class HwExpHistogram(Elaboratable, HwMetric):
         max_value: int
             The maximum value that the histogram would be able to count. This
             value is used to calculate the number of buckets.
+        ways: int
+            The number of users of this metric.
         """
 
         super().__init__(fully_qualified_name, description)
         self.bucket_count = bucket_count
         self.sample_width = sample_width
 
-        self._add = Method(i=[("sample", self.sample_width)])
+        self.add = self.wrap_method(Methods(ways, i=[("sample", self.sample_width)]))
 
         self.count = HwMetricRegister("count", registers_width, "the count of events that have been observed")
         self.sum = HwMetricRegister("sum", registers_width, "the total sum of all observed values")
@@ -445,8 +456,9 @@ class HwExpHistogram(Elaboratable, HwMetric):
 
         m = TModule()
 
-        @def_method(m, self._add)
-        def _(sample):
+        @def_methods(m, self.add)
+        def _(k: int, sample):
+            # TODO
             m.d.sync += self.count.value.eq(self.count.value + 1)
             m.d.sync += self.sum.value.eq(self.sum.value + sample)
 
@@ -478,24 +490,19 @@ class HwExpHistogram(Elaboratable, HwMetric):
 
         return m
 
-    def add(self, m: TModule, sample: Value):
-        """
-        Adds a new sample to the histogram.
+    add: Methods
+    """
+    Adds a new sample to the histogram.
 
-        Should be called in the body of either a transaction or a method.
+    Should be called in the body of either a transaction or a method.
 
-        Parameters
-        ----------
-        m: TModule
-            Transactron module
-        sample: ValueLike
-            The value that will be added to the histogram
-        """
-
-        if not self.metrics_enabled():
-            return
-
-        self._add(m, sample)
+    Parameters
+    ----------
+    m: TModule
+        Transactron module
+    sample: ValueLike
+        The value that will be added to the histogram
+    """
 
 
 class FIFOLatencyMeasurer(Elaboratable):
@@ -515,6 +522,7 @@ class FIFOLatencyMeasurer(Elaboratable):
         *,
         slots_number: int,
         max_latency: int,
+        ways: int = 1
     ):
         """
         Parameters
@@ -530,14 +538,16 @@ class FIFOLatencyMeasurer(Elaboratable):
             number of buckets in the histogram. If a latency turns to be
             bigger than the maximum, it will overflow and result in a false
             measurement.
+        ways: int
+            The number of users of this metric.
         """
         self.fully_qualified_name = fully_qualified_name
         self.description = description
         self.slots_number = slots_number
         self.max_latency = max_latency
 
-        self._start = Method()
-        self._stop = Method()
+        self.start = HwMetric.wrap_method(Methods(ways))
+        self.stop = HwMetric.wrap_method(Methods(ways))
 
         # This bucket count gives us the best possible granularity.
         bucket_count = bits_for(self.max_latency) + 1
@@ -546,75 +556,66 @@ class FIFOLatencyMeasurer(Elaboratable):
             self.description,
             bucket_count=bucket_count,
             sample_width=bits_for(self.max_latency),
+            ways=ways
         )
 
     def elaborate(self, platform):
-        if not self.metrics_enabled():
+        if not HwMetric.metrics_enabled():
             return TModule()
 
         m = TModule()
 
         epoch_width = bits_for(self.max_latency)
 
-        m.submodules.fifo = self.fifo = FIFO([("epoch", epoch_width)], self.slots_number)
+        self.fifos: list[FIFO] = []
+        for k in range(len(self.start)):
+            m.submodules[f"fifo{k}"] = self.fifos[k] = FIFO([("epoch", epoch_width)], self.slots_number)
+
         m.submodules.histogram = self.histogram
 
         epoch = Signal(epoch_width)
 
         m.d.sync += epoch.eq(epoch + 1)
 
-        @def_method(m, self._start)
-        def _():
-            self.fifo.write(m, epoch)
+        @def_methods(m, self.start)
+        def _(k: int):
+            self.fifos[k].write(m, epoch)
 
-        @def_method(m, self._stop)
-        def _():
-            ret = self.fifo.read(m)
+        @def_methods(m, self.stop)
+        def _(k: int):
+            ret = self.fifos[k].read(m)
             # The result of substracting two unsigned n-bit is a signed (n+1)-bit value,
             # so we need to cast the result and discard the most significant bit.
             duration = (epoch - ret.epoch).as_unsigned()[:-1]
-            self.histogram.add(m, duration)
+            self.histogram.add[k](m, duration)
 
         return m
 
-    def start(self, m: TModule):
-        """
-        Registers the start of an event. Can be called before the previous events
-        finish. If there are no slots available, the method will be blocked.
+    start: Methods
+    """
+    Registers the start of an event. Can be called before the previous events
+    finish. If there are no slots available, the method will be blocked.
 
-        Should be called in the body of either a transaction or a method.
+    Should be called in the body of either a transaction or a method.
 
-        Parameters
-        ----------
-        m: TModule
-            Transactron module
-        """
+    Parameters
+    ----------
+    m: TModule
+        Transactron module
+    """
 
-        if not self.metrics_enabled():
-            return
+    stop: Methods
+    """
+    Registers the end of the oldest event (the FIFO order). If there are no
+    started events in the queue, the method will block.
 
-        self._start(m)
+    Should be called in the body of either a transaction or a method.
 
-    def stop(self, m: TModule):
-        """
-        Registers the end of the oldest event (the FIFO order). If there are no
-        started events in the queue, the method will block.
-
-        Should be called in the body of either a transaction or a method.
-
-        Parameters
-        ----------
-        m: TModule
-            Transactron module
-        """
-
-        if not self.metrics_enabled():
-            return
-
-        self._stop(m)
-
-    def metrics_enabled(self) -> bool:
-        return DependencyContext.get().get_dependency(HwMetricsEnabledKey())
+    Parameters
+    ----------
+    m: TModule
+        Transactron module
+    """
 
 
 class TaggedLatencyMeasurer(Elaboratable):
@@ -634,6 +635,7 @@ class TaggedLatencyMeasurer(Elaboratable):
         *,
         slots_number: int,
         max_latency: int,
+        ways: int = 1
     ):
         """
         Parameters
@@ -649,14 +651,16 @@ class TaggedLatencyMeasurer(Elaboratable):
             number of buckets in the histogram. If a latency turns to be
             bigger than the maximum, it will overflow and result in a false
             measurement.
+        ways: int
+            The number of users of this metric.
         """
         self.fully_qualified_name = fully_qualified_name
         self.description = description
         self.slots_number = slots_number
         self.max_latency = max_latency
 
-        self._start = Method(i=[("slot", range(0, slots_number))])
-        self._stop = Method(i=[("slot", range(0, slots_number))])
+        self.start = HwMetric.wrap_method(Methods(ways, i=[("slot", range(0, slots_number))]))
+        self.stop = HwMetric.wrap_method(Methods(ways, i=[("slot", range(0, slots_number))]))
 
         # This bucket count gives us the best possible granularity.
         bucket_count = bits_for(self.max_latency) + 1
@@ -665,12 +669,13 @@ class TaggedLatencyMeasurer(Elaboratable):
             self.description,
             bucket_count=bucket_count,
             sample_width=bits_for(self.max_latency),
+            ways=ways
         )
 
         self.log = logging.HardwareLogger(fully_qualified_name)
 
     def elaborate(self, platform):
-        if not self.metrics_enabled():
+        if not HwMetric.metrics_enabled():
             return TModule()
 
         m = TModule()
@@ -678,7 +683,7 @@ class TaggedLatencyMeasurer(Elaboratable):
         epoch_width = bits_for(self.max_latency)
 
         m.submodules.slots = self.slots = AsyncMemoryBank(
-            shape=make_layout(("epoch", epoch_width)), depth=self.slots_number
+            shape=make_layout(("epoch", epoch_width)), depth=self.slots_number, write_ports=len(self.start), read_ports=len(self.stop)
         )
         m.submodules.histogram = self.histogram
 
@@ -694,64 +699,51 @@ class TaggedLatencyMeasurer(Elaboratable):
 
         m.d.sync += epoch.eq(epoch + 1)
 
-        @def_method(m, self._start)
-        def _(slot: Value):
+        @def_methods(m, self.start)
+        def _(k: int, slot: Value):
             m.d.comb += slots_taken_start.eq(slots_taken | (1 << slot))
             self.log.error(m, (slots_taken & (1 << slot)).any(), "taken slot {} taken again", slot)
-            self.slots.write(m, addr=slot, data=epoch)
+            self.slots.write[k](m, addr=slot, data=epoch)
 
-        @def_method(m, self._stop)
-        def _(slot: Value):
+        @def_methods(m, self.stop)
+        def _(k: int, slot: Value):
             m.d.comb += slots_taken_stop.eq(slots_taken_start & ~(C(1, self.slots_number) << slot))
             self.log.error(m, ~(slots_taken & (1 << slot)).any(), "free slot {} freed again", slot)
-            ret = self.slots.read(m, addr=slot)
+            ret = self.slots.read[k](m, addr=slot)
             # The result of substracting two unsigned n-bit is a signed (n+1)-bit value,
             # so we need to cast the result and discard the most significant bit.
             duration = (epoch - ret.data.epoch).as_unsigned()[:-1]
-            self.histogram.add(m, duration)
+            self.histogram.add[k](m, duration)
 
         return m
 
-    def start(self, m: TModule, *, slot: ValueLike):
-        """
-        Registers the start of an event for a given slot tag.
+    start: Methods
+    """
+    Registers the start of an event for a given slot tag.
 
-        Should be called in the body of either a transaction or a method.
+    Should be called in the body of either a transaction or a method.
 
-        Parameters
-        ----------
-        m: TModule
-            Transactron module
-        slot: ValueLike
-            The slot tag of the event.
-        """
+    Parameters
+    ----------
+    m: TModule
+        Transactron module
+    slot: ValueLike
+        The slot tag of the event.
+    """
 
-        if not self.metrics_enabled():
-            return
+    stop: Methods
+    """
+    Registers the end of the event for a given slot tag.
 
-        self._start(m, slot)
+    Should be called in the body of either a transaction or a method.
 
-    def stop(self, m: TModule, *, slot: ValueLike):
-        """
-        Registers the end of the event for a given slot tag.
-
-        Should be called in the body of either a transaction or a method.
-
-        Parameters
-        ----------
-        m: TModule
-            Transactron module
-        slot: ValueLike
-            The slot tag of the event.
-        """
-
-        if not self.metrics_enabled():
-            return
-
-        self._stop(m, slot)
-
-    def metrics_enabled(self) -> bool:
-        return DependencyContext.get().get_dependency(HwMetricsEnabledKey())
+    Parameters
+    ----------
+    m: TModule
+        Transactron module
+    slot: ValueLike
+        The slot tag of the event.
+    """
 
 
 class HardwareMetricsManager:
