@@ -26,7 +26,7 @@ class CounterInMethodCircuit(Elaboratable):
 
         @def_method(m, self.method)
         def _():
-            self.counter.incr(m)
+            self.counter.incr[0](m)
 
         return m
 
@@ -43,7 +43,7 @@ class CounterWithConditionInMethodCircuit(Elaboratable):
 
         @def_method(m, self.method)
         def _(cond):
-            self.counter.incr(m, cond=cond)
+            self.counter.incr[0](m, enable_call=cond)
 
         return m
 
@@ -59,7 +59,7 @@ class CounterWithoutMethodCircuit(Elaboratable):
         m.submodules.counter = self.counter
 
         with Transaction().body(m):
-            self.counter.incr(m, cond=self.cond)
+            self.counter.incr[0](m, enable_call=self.cond)
 
         return m
 
@@ -155,7 +155,7 @@ class TaggedCounterCircuit(Elaboratable):
         m.submodules.counter = self.counter
 
         with Transaction().body(m):
-            self.counter.incr(m, self.tag, cond=self.cond)
+            self.counter.incr(m, tag=self.tag, enable_call=self.cond)
 
         return m
 
@@ -335,7 +335,7 @@ class TestFIFOLatencyMeasurer(TestLatencyMeasurerBase):
             ticks = DependencyContext.get().get_dependency(TicksKey())
 
             for _ in range(200):
-                await m._start.call(sim)
+                await m.start[0].call(sim)
 
                 event_queue.put(sim.get(ticks))
                 await self.random_wait_geom(sim, 0.8)
@@ -346,7 +346,7 @@ class TestFIFOLatencyMeasurer(TestLatencyMeasurerBase):
             ticks = DependencyContext.get().get_dependency(TicksKey())
 
             while not finish:
-                await m._stop.call(sim)
+                await m.stop[0].call(sim)
 
                 latencies.append(sim.get(ticks) - event_queue.get())
 
@@ -396,7 +396,7 @@ class TestIndexedLatencyMeasurer(TestLatencyMeasurerBase):
                 await sim.delay(1e-9)
 
                 slot_id = random.choice(free_slots)
-                await m._start.call(sim, slot=slot_id)
+                await m.start[0].call(sim, slot=slot_id)
 
                 events[slot_id] = sim.get(tick_count)
                 free_slots.remove(slot_id)
@@ -415,7 +415,7 @@ class TestIndexedLatencyMeasurer(TestLatencyMeasurerBase):
 
                 slot_id = random.choice(used_slots)
 
-                await m._stop.call(sim, slot=slot_id)
+                await m.stop[0].call(sim, slot=slot_id)
 
                 await sim.delay(2e-9)
 
@@ -447,9 +447,9 @@ class MetricManagerTestCircuit(Elaboratable):
 
         @def_method(m, self.incr_counters)
         def _(counter1, counter2, counter3):
-            self.counter1.incr(m, cond=counter1)
-            self.counter2.incr(m, cond=counter2)
-            self.counter3.incr(m, cond=counter3)
+            self.counter1.incr[0](m, enable_call=counter1)
+            self.counter2.incr[0](m, enable_call=counter2)
+            self.counter3.incr[0](m, enable_call=counter3)
 
         return m
 

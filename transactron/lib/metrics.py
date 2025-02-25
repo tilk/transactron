@@ -567,9 +567,9 @@ class FIFOLatencyMeasurer(Elaboratable):
 
         epoch_width = bits_for(self.max_latency)
 
-        self.fifos: list[FIFO] = []
+        self.fifos = [FIFO([("epoch", epoch_width)], self.slots_number) for _ in range(len(self.start))]
         for k in range(len(self.start)):
-            m.submodules[f"fifo{k}"] = self.fifos[k] = FIFO([("epoch", epoch_width)], self.slots_number)
+            m.submodules[f"fifo{k}"] = self.fifos[k]
 
         m.submodules.histogram = self.histogram
 
