@@ -1,5 +1,5 @@
 from collections import defaultdict
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from itertools import count
 
@@ -27,6 +27,7 @@ class AdapterBodyParams(TypedDict):
 
 class BodyParams(AdapterBodyParams):
     validate_arguments: NotRequired[Callable[..., ValueLike]]
+    default: NotRequired[Mapping[str, ValueLike]]
 
 
 @final
@@ -36,7 +37,8 @@ class Body(TransactionBase["Body"]):
     stack: ClassVar[list["Body"]] = []
     ctrl_path: CtrlPath = CtrlPath(-1, [])
     method_uses: dict["Method", tuple[MethodStruct, Signal]]
-    method_calls: defaultdict["Method", list[tuple[CtrlPath, MethodStruct, ValueLike]]]
+    method_calls: defaultdict["Method", list[tuple[CtrlPath, AssignArg, ValueLike]]]
+    default: dict[str, ValueLike]
 
     def __init__(
         self,
@@ -72,6 +74,7 @@ class Body(TransactionBase["Body"]):
         self.validate_arguments: Optional[Callable[..., ValueLike]] = (
             kwargs["validate_arguments"] if "validate_arguments" in kwargs else None
         )
+        self.default = dict(kwargs["default"]) if "default" in kwargs else {}
         self.method_uses = {}
         self.method_calls = defaultdict(list)
 
@@ -116,13 +119,15 @@ class Body(TransactionBase["Body"]):
         for method, calls in self.method_calls.items():
             arg_rec, enable_sig = self.method_uses[method]
             if len(calls) == 1:
-                m.d.comb += arg_rec.eq(calls[0][1])
+                m.d.comb += assign(arg_rec, method._body.default)
+                m.d.comb += assign(arg_rec, calls[0][1])
                 m.d.comb += enable_sig.eq(calls[0][2])
             else:
-                call_ens = Cat([en for _, _, en in calls])
+                call_ens = Cat(en for _, _, en in calls)
+                m.d.comb += assign(arg_rec, method._body.default)
 
                 for i in OneHotSwitchDynamic(m, call_ens):
-                    m.d.comb += arg_rec.eq(calls[i][1])
+                    m.d.comb += assign(arg_rec, calls[i][1])
                     m.d.comb += enable_sig.eq(1)
 
 

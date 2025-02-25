@@ -210,6 +210,9 @@ class Method(TransactionBase["Transaction | Method"]):
             If true, this method is intended to be called from a single
             transaction. An error will be thrown if called from multiple
             transactions.
+        default: dict[str, ValueLike]
+            Default values for method arguments. When the method is called,
+            any missing argument will be substituted from the defaults.
 
         Returns
         -------
@@ -291,22 +294,22 @@ class Method(TransactionBase["Transaction | Method"]):
             with Transaction().body(m):
                 ret = my_sum_method(m, {"arg1": 2, "arg2": 3})
         """
-        arg_rec = Signal.like(self.data_in)
-
         if arg is not None and kwargs:
             raise ValueError(f"Method '{self.name}' call with both keyword arguments and legacy record argument")
 
         if arg is None:
             arg = kwargs
 
+        # This call is to throw exceptions early to detect incompatibilities.
+        assign(Signal.like(self.data_in), arg, fields=AssignType.RHS)
+
         enable_sig = Signal(name=self.owned_name + "_enable")
         m.d.av_comb += enable_sig.eq(enable)
-        m.d.top_comb += assign(arg_rec, arg, fields=AssignType.ALL)
 
         caller = Body.get()
         if not all(ctrl_path.exclusive_with(m.ctrl_path) for ctrl_path, _, _ in caller.method_calls[self]):
             raise RuntimeError(f"Method '{self.name}' can't be called twice from the same caller '{caller.name}'")
-        caller.method_calls[self].append((m.ctrl_path, arg_rec, enable_sig))
+        caller.method_calls[self].append((m.ctrl_path, arg, enable_sig))
 
         if self not in caller.method_uses:
             arg_rec_use = Signal(self.layout_in)
