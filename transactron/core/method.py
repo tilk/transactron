@@ -318,7 +318,7 @@ class Method(TransactionBase["Transaction | Method"]):
     def __repr__(self) -> str:
         return "(method {})".format(self.name)
 
-    def debug_signals(self) -> SignalBundle:
+    def debug_signals(self) -> ValueBundle:
         return [self.ready, self.run, self.data_in, self.data_out]
 
 
@@ -364,5 +364,5 @@ class Methods(Sequence[Method]):
     def __len__(self) -> int:
         return len(self._methods)
 
-    def debug_signals(self) -> SignalBundle:
+    def debug_signals(self) -> ValueBundle:
         return {method.name: method.debug_signals() for method in self._methods}

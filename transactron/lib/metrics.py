@@ -8,11 +8,11 @@ from enum import Enum
 from amaranth import *
 from amaranth.utils import bits_for, ceil_log2, exact_log2
 
-from transactron.utils import ValueLike, OneHotSwitchDynamic, SignalBundle
-from transactron import Method, Methods, def_method, def_methods, TModule
+from transactron.utils import OneHotSwitchDynamic, ValueBundle
+from transactron import Method, Methods, def_methods, TModule
 from transactron.lib import FIFO, AsyncMemoryBank, logging
 from transactron.utils._typing import MethodStruct
-from transactron.utils.amaranth_ext.functions import popcount
+from transactron.utils.amaranth_ext.functions import max_value, min_value, popcount
 from transactron.utils.dependencies import ListKey, DependencyContext, SimpleKey
 from transactron.utils.transactron_helpers import make_layout
 
@@ -186,8 +186,10 @@ class HwMetric(ABC, MetricModel):
     @staticmethod
     def wrap_method(method: _T_Method) -> _T_Method:
         if not HwMetric.metrics_enabled():
+
             def dummy(*args, **kwargs) -> MethodStruct:
                 return Signal(StructLayout({}))
+
             if isinstance(method, Method):
                 method.__call__ = dummy
             else:
@@ -285,7 +287,7 @@ class TaggedCounter(Elaboratable, HwMetric):
         *,
         tags: range | Type[Enum] | list[int],
         registers_width: int = 32,
-        ways: int = 1
+        ways: int = 1,
     ):
         """
         Parameters
@@ -345,9 +347,7 @@ class TaggedCounter(Elaboratable, HwMetric):
 
         m = TModule()
 
-        runs: dict[int, Signal] = {}
-        for tag_value in self.counters.keys():
-            runs[tag_value] = Signal(len(self.incr))
+        runs: dict[int, Signal] = {tag_value: Signal(len(self.incr)) for tag_value in self.counters.keys()}
 
         @def_methods(m, self.incr)
         def _(k: int, tag):
@@ -359,7 +359,7 @@ class TaggedCounter(Elaboratable, HwMetric):
                 for tag_value in self.counters.keys():
                     with m.If(tag == tag_value):
                         m.d.comb += runs[tag_value][k].eq(1)
-        
+
         for tag_value, counter in self.counters.items():
             m.d.sync += counter.value.eq(counter.value + popcount(runs[tag_value]))
 
@@ -403,7 +403,7 @@ class HwExpHistogram(Elaboratable, HwMetric):
         bucket_count: int,
         sample_width: int = 32,
         registers_width: int = 32,
-        ways: int = 1
+        ways: int = 1,
     ):
         """
         Parameters
@@ -435,7 +435,7 @@ class HwExpHistogram(Elaboratable, HwMetric):
         )
         self.max = HwMetricRegister("max", self.sample_width, "the maximum of all observed values")
 
-        self.buckets = []
+        self.buckets: list[HwMetricRegister] = []
         for i in range(self.bucket_count):
             bucket_start = 0 if i == 0 else 2 ** (i - 1)
             bucket_end = "inf" if i == self.bucket_count - 1 else 2**i
@@ -456,9 +456,14 @@ class HwExpHistogram(Elaboratable, HwMetric):
 
         m = TModule()
 
+        bucket_runs: list[Signal] = [Signal(len(self.add)) for _ in self.buckets]
+        
+        min_sample = min_value(Mux(m.run, m.data_in.sample, C(-1, self.sample_width)) for m in self.add)
+        max_sample = max_value(Mux(m.run, m.data_in.sample, C(0, self.sample_width)) for m in self.add)
+
         @def_methods(m, self.add)
         def _(k: int, sample):
-            # TODO
+            # TODO handle count, sum, min, max
             m.d.sync += self.count.value.eq(self.count.value + 1)
             m.d.sync += self.sum.value.eq(self.sum.value + sample)
 
@@ -474,8 +479,7 @@ class HwExpHistogram(Elaboratable, HwMetric):
                 with m.If(sample[i]):
                     m.d.av_comb += bucket_idx.eq(i)
 
-            for i, bucket in enumerate(self.buckets):
-                should_incr = C(0)
+            for i in range(len(self.buckets)):
                 if i == 0:
                     # The first bucket has a range [0, 1).
                     should_incr = sample == 0
@@ -485,8 +489,10 @@ class HwExpHistogram(Elaboratable, HwMetric):
                 else:
                     should_incr = (bucket_idx == i - 1) & (sample != 0)
 
-                with m.If(should_incr):
-                    m.d.sync += bucket.value.eq(bucket.value + 1)
+                bucket_runs[i][k].eq(should_incr)
+
+        for i, bucket in enumerate(self.buckets):
+            m.d.sync += bucket.value.eq(bucket.value + popcount(bucket_runs[i]))
 
         return m
 
@@ -516,13 +522,7 @@ class FIFOLatencyMeasurer(Elaboratable):
     """
 
     def __init__(
-        self,
-        fully_qualified_name: str,
-        description: str = "",
-        *,
-        slots_number: int,
-        max_latency: int,
-        ways: int = 1
+        self, fully_qualified_name: str, description: str = "", *, slots_number: int, max_latency: int, ways: int = 1
     ):
         """
         Parameters
@@ -556,7 +556,7 @@ class FIFOLatencyMeasurer(Elaboratable):
             self.description,
             bucket_count=bucket_count,
             sample_width=bits_for(self.max_latency),
-            ways=ways
+            ways=ways,
         )
 
     def elaborate(self, platform):
@@ -629,13 +629,7 @@ class TaggedLatencyMeasurer(Elaboratable):
     """
 
     def __init__(
-        self,
-        fully_qualified_name: str,
-        description: str = "",
-        *,
-        slots_number: int,
-        max_latency: int,
-        ways: int = 1
+        self, fully_qualified_name: str, description: str = "", *, slots_number: int, max_latency: int, ways: int = 1
     ):
         """
         Parameters
@@ -669,7 +663,7 @@ class TaggedLatencyMeasurer(Elaboratable):
             self.description,
             bucket_count=bucket_count,
             sample_width=bits_for(self.max_latency),
-            ways=ways
+            ways=ways,
         )
 
         self.log = logging.HardwareLogger(fully_qualified_name)
@@ -683,7 +677,10 @@ class TaggedLatencyMeasurer(Elaboratable):
         epoch_width = bits_for(self.max_latency)
 
         m.submodules.slots = self.slots = AsyncMemoryBank(
-            shape=make_layout(("epoch", epoch_width)), depth=self.slots_number, write_ports=len(self.start), read_ports=len(self.stop)
+            shape=make_layout(("epoch", epoch_width)),
+            depth=self.slots_number,
+            write_ports=len(self.start),
+            read_ports=len(self.stop),
         )
         m.submodules.histogram = self.histogram
 
@@ -796,14 +793,14 @@ class HardwareMetricsManager:
             raise RuntimeError(f"Couldn't find metric '{metric_name}'")
         return metrics[metric_name].signals[reg_name]
 
-    def debug_signals(self) -> SignalBundle:
+    def debug_signals(self) -> ValueBundle:
         """
         Returns tree-like SignalBundle composed of all metric registers.
         """
         metrics = self.get_metrics()
 
         def rec(metric_names: list[str], depth: int = 1):
-            bundle: list[SignalBundle] = []
+            bundle: list[ValueBundle] = []
             components: dict[str, list[str]] = {}
 
             for metric in metric_names:

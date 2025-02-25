@@ -6,7 +6,7 @@ from amaranth.lib.data import StructLayout, View
 
 from ..utils import SrcLoc, get_src_loc, MethodStruct
 from ..core import *
-from ..utils._typing import SignalBundle, MethodLayout
+from ..utils._typing import ValueBundle, MethodLayout
 
 __all__ = [
     "AdapterBase",
@@ -25,7 +25,7 @@ class AdapterBase(Component):
         super().__init__({"data_in": In(layout_in), "data_out": Out(layout_out), "en": In(1), "done": Out(1)})
         self.iface = iface
 
-    def debug_signals(self) -> SignalBundle:
+    def debug_signals(self) -> ValueBundle:
         return [self.en, self.done, self.data_in, self.data_out]
 
     @abstractmethod
