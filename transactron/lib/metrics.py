@@ -12,7 +12,7 @@ from transactron.utils import OneHotSwitchDynamic, ValueBundle
 from transactron import Method, Methods, def_methods, TModule
 from transactron.lib import FIFO, AsyncMemoryBank, logging
 from transactron.utils._typing import MethodStruct
-from transactron.utils.amaranth_ext.functions import max_value, min_value, popcount
+from transactron.utils.amaranth_ext.functions import max_value, min_value, sum_value, popcount
 from transactron.utils.dependencies import ListKey, DependencyContext, SimpleKey
 from transactron.utils.transactron_helpers import make_layout
 
@@ -236,13 +236,11 @@ class HwCounter(Elaboratable, HwMetric):
 
         m = TModule()
 
-        runs = Signal(len(self.incr))
-
         @def_methods(m, self.incr)
         def _(k: int):
-            m.d.comb += runs[k].eq(1)
+            pass  # The actual counter logic is below
 
-        m.d.sync += self.count.value.eq(self.count.value + popcount(runs))
+        m.d.sync += self.count.value.eq(self.count.value + popcount(Cat(method.run for method in self.incr)))
 
         return m
 
@@ -456,23 +454,10 @@ class HwExpHistogram(Elaboratable, HwMetric):
 
         m = TModule()
 
-        bucket_runs: list[Signal] = [Signal(len(self.add)) for _ in self.buckets]
-        
-        min_sample = min_value(Mux(m.run, m.data_in.sample, C(-1, self.sample_width)) for m in self.add)
-        max_sample = max_value(Mux(m.run, m.data_in.sample, C(0, self.sample_width)) for m in self.add)
+        bucket_incrs: list[Signal] = [Signal(len(self.add)) for _ in self.buckets]
 
         @def_methods(m, self.add)
         def _(k: int, sample):
-            # TODO handle count, sum, min, max
-            m.d.sync += self.count.value.eq(self.count.value + 1)
-            m.d.sync += self.sum.value.eq(self.sum.value + sample)
-
-            with m.If(sample > self.max.value):
-                m.d.sync += self.max.value.eq(sample)
-
-            with m.If(sample < self.min.value):
-                m.d.sync += self.min.value.eq(sample)
-
             # todo: perhaps replace with a recursive implementation of the priority encoder
             bucket_idx = Signal(range(self.sample_width))
             for i in range(self.sample_width):
@@ -489,10 +474,25 @@ class HwExpHistogram(Elaboratable, HwMetric):
                 else:
                     should_incr = (bucket_idx == i - 1) & (sample != 0)
 
-                bucket_runs[i][k].eq(should_incr)
+                m.d.comb += bucket_incrs[i][k].eq(should_incr)
+
+        def sample_or_default(method: Method, default: Value) -> Value:
+            return Mux(method.run, method.data_in.sample, default)
+
+        method_min_samples = (sample_or_default(m, C(-1, self.sample_width)) for m in self.add)
+        method_max_samples = (sample_or_default(m, C(0, self.sample_width)) for m in self.add)
+
+        min_sample = min_value(self.min.value, method_min_samples)
+        max_sample = max_value(self.max.value, method_max_samples)
+        sample_sum = sum_value(method_max_samples)
+
+        m.d.sync += self.max.value.eq(max_sample)
+        m.d.sync += self.min.value.eq(min_sample)
+        m.d.sync += self.count.value.eq(self.count.value + popcount(Cat(m.run for m in self.add)))
+        m.d.sync += self.sum.value.eq(self.sum.value + sample_sum)
 
         for i, bucket in enumerate(self.buckets):
-            m.d.sync += bucket.value.eq(bucket.value + popcount(bucket_runs[i]))
+            m.d.sync += bucket.value.eq(bucket.value + popcount(bucket_incrs[i]))
 
         return m
 

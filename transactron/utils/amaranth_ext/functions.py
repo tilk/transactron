@@ -19,6 +19,7 @@ __all__ = [
     "shape_of",
     "const_of",
     "binary_tree_reduce",
+    "sum_value",
     "generic_min_value",
     "min_value",
     "max_value",
@@ -149,6 +150,10 @@ def binary_tree_reduce(*values: ValueBundle, neutral: Value, operator: Callable[
         min_layers = [operator(a, b) for a, b in zip(min_layers[::2], min_layers[1::2])] + tail
 
     return min_layers[0]
+
+
+def sum_value(*values: ValueBundle):
+    return binary_tree_reduce(*values, neutral=C(0), operator=operator.add)
 
 
 def generic_min_value(*values: ValueBundle, operator: Callable[[Value, Value], Value]) -> Value:
