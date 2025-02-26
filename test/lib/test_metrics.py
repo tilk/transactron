@@ -6,6 +6,7 @@ from typing import Type
 from enum import IntFlag, IntEnum, auto, Enum
 
 from amaranth import *
+from amaranth.lib.data import ArrayLayout
 
 from transactron.lib.metrics import *
 from transactron import *
@@ -49,9 +50,9 @@ class CounterWithConditionInMethodCircuit(Elaboratable):
 
 
 class CounterWithoutMethodCircuit(Elaboratable):
-    def __init__(self):
-        self.cond = Signal()
-        self.counter = HwCounter("with_condition_without_method")
+    def __init__(self, ways: int):
+        self.cond = Signal(ways)
+        self.counter = HwCounter("with_condition_without_method", ways=ways)
 
     def elaborate(self, platform):
         m = TModule()
@@ -59,7 +60,8 @@ class CounterWithoutMethodCircuit(Elaboratable):
         m.submodules.counter = self.counter
 
         with Transaction().body(m):
-            self.counter.incr[0](m, enable_call=self.cond)
+            for k in range(len(self.cond)):
+                self.counter.incr[k](m, enable_call=self.cond[k])
 
         return m
 
@@ -109,20 +111,20 @@ class TestHwCounter(TestCaseWithSimulator):
         with self.run_simulation(m) as sim:
             sim.add_testbench(test_process)
 
-    def test_counter_with_condition_without_method(self):
-        m = CounterWithoutMethodCircuit()
+    @pytest.mark.parametrize("ways", [1, 4])
+    def test_counter_with_condition_without_method(self, ways):
+        m = CounterWithoutMethodCircuit(ways)
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
 
         async def test_process(sim):
             called_cnt = 0
             for _ in range(200):
-                condition = random.randint(0, 1)
+                condition = random.randrange(2**ways)
 
                 sim.set(m.cond, condition)
                 await sim.tick()
 
-                if condition == 1:
-                    called_cnt += 1
+                called_cnt += condition.bit_count()
 
                 assert called_cnt == sim.get(m.counter.count.value)
 
@@ -143,11 +145,11 @@ class PlainIntEnum(IntEnum):
 
 
 class TaggedCounterCircuit(Elaboratable):
-    def __init__(self, tags: range | Type[Enum] | list[int]):
-        self.counter = TaggedCounter("counter", "", tags=tags)
+    def __init__(self, tags: range | Type[Enum] | list[int], ways: int):
+        self.counter = TaggedCounter("counter", "", tags=tags, ways=ways)
 
-        self.cond = Signal()
-        self.tag = Signal(self.counter.tag_width)
+        self.cond = Signal(ways)
+        self.tag = Signal(ArrayLayout(self.counter.tag_width, ways))
 
     def elaborate(self, platform):
         m = TModule()
@@ -155,17 +157,19 @@ class TaggedCounterCircuit(Elaboratable):
         m.submodules.counter = self.counter
 
         with Transaction().body(m):
-            self.counter.incr(m, self.tag, enable_call=self.cond)
+            for k in range(len(self.cond)):
+                self.counter.incr[k](m, self.tag[k], enable_call=self.cond[k])
 
         return m
 
 
+@pytest.mark.parametrize("ways", [1, 4])
 class TestTaggedCounter(TestCaseWithSimulator):
     def setup_method(self) -> None:
         random.seed(42)
 
-    def do_test_enum(self, tags: range | Type[Enum] | list[int], tag_values: list[int]):
-        m = TaggedCounterCircuit(tags)
+    def do_test_enum(self, tags: range | Type[Enum] | list[int], tag_values: list[int], ways: int):
+        m = TaggedCounterCircuit(tags, ways)
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
 
         counts: dict[int, int] = {}
@@ -177,36 +181,37 @@ class TestTaggedCounter(TestCaseWithSimulator):
                 for i in tag_values:
                     assert counts[i] == sim.get(m.counter.counters[i].value)
 
-                tag = random.choice(list(tag_values))
+                condition = random.randrange(2**ways)
+                tags = [random.choice(list(tag_values)) for _ in range(ways)]
 
-                sim.set(m.cond, 1)
-                sim.set(m.tag, tag)
-                await sim.tick()
-                sim.set(m.cond, 0)
+                sim.set(m.cond, condition)
+                sim.set(m.tag, tags)
                 await sim.tick()
 
-                counts[tag] += 1
+                for k in range(ways):
+                    if condition & (1 << k):
+                        counts[tags[k]] += 1
 
         with self.run_simulation(m) as sim:
             sim.add_testbench(test_process)
 
-    def test_one_hot_enum(self):
-        self.do_test_enum(OneHotEnum, [e.value for e in OneHotEnum])
+    def test_one_hot_enum(self, ways: int):
+        self.do_test_enum(OneHotEnum, [e.value for e in OneHotEnum], ways)
 
-    def test_plain_int_enum(self):
-        self.do_test_enum(PlainIntEnum, [e.value for e in PlainIntEnum])
+    def test_plain_int_enum(self, ways: int):
+        self.do_test_enum(PlainIntEnum, [e.value for e in PlainIntEnum], ways)
 
-    def test_negative_range(self):
+    def test_negative_range(self, ways: int):
         r = range(-10, 15, 3)
-        self.do_test_enum(r, list(r))
+        self.do_test_enum(r, list(r), ways)
 
-    def test_positive_range(self):
+    def test_positive_range(self, ways: int):
         r = range(0, 30, 2)
-        self.do_test_enum(r, list(r))
+        self.do_test_enum(r, list(r), ways)
 
-    def test_value_list(self):
+    def test_value_list(self, ways):
         values = [-2137, 2, 4, 8, 42]
-        self.do_test_enum(values, values)
+        self.do_test_enum(values, values, ways)
 
 
 class ExpHistogramCircuit(Elaboratable):
