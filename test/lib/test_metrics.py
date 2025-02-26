@@ -155,7 +155,7 @@ class TaggedCounterCircuit(Elaboratable):
         m.submodules.counter = self.counter
 
         with Transaction().body(m):
-            self.counter.incr(m, tag=self.tag, enable_call=self.cond)
+            self.counter.incr(m, self.tag, enable_call=self.cond)
 
         return m
 

@@ -479,17 +479,17 @@ class HwExpHistogram(Elaboratable, HwMetric):
         def sample_or_default(method: Method, default: Value) -> Value:
             return Mux(method.run, method.data_in.sample, default)
 
-        method_min_samples = (sample_or_default(m, C(-1, self.sample_width)) for m in self.add)
-        method_max_samples = (sample_or_default(m, C(0, self.sample_width)) for m in self.add)
+        method_min_samples = list(sample_or_default(m, C((1 << self.sample_width)) - 1) for m in self.add)
+        method_max_samples = list(sample_or_default(m, C(0)) for m in self.add)
 
         min_sample = min_value(self.min.value, method_min_samples)
         max_sample = max_value(self.max.value, method_max_samples)
-        sample_sum = sum_value(method_max_samples)
+        sample_sum = sum_value(self.sum.value, method_max_samples)
 
-        m.d.sync += self.max.value.eq(max_sample)
         m.d.sync += self.min.value.eq(min_sample)
+        m.d.sync += self.max.value.eq(max_sample)
         m.d.sync += self.count.value.eq(self.count.value + popcount(Cat(m.run for m in self.add)))
-        m.d.sync += self.sum.value.eq(self.sum.value + sample_sum)
+        m.d.sync += self.sum.value.eq(sample_sum)
 
         for i, bucket in enumerate(self.buckets):
             m.d.sync += bucket.value.eq(bucket.value + popcount(bucket_incrs[i]))
