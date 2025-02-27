@@ -1,3 +1,4 @@
+import functools
 import json
 import random
 import queue
@@ -233,6 +234,7 @@ class ExpHistogramCircuit(Elaboratable):
         return m
 
 
+@pytest.mark.parametrize("ways", [1, 4])
 @pytest.mark.parametrize(
     "bucket_count, sample_width",
     [
@@ -243,23 +245,26 @@ class ExpHistogramCircuit(Elaboratable):
     ],
 )
 class TestHwHistogram(TestCaseWithSimulator):
-    def test_histogram(self, bucket_count: int, sample_width: int):
+    def test_histogram(self, bucket_count: int, sample_width: int, ways: int):
         random.seed(42)
 
-        m = SimpleTestCircuit(ExpHistogramCircuit(bucket_cnt=bucket_count, sample_width=sample_width))
+        m = SimpleTestCircuit(
+            HwExpHistogram("histogram", bucket_count=bucket_count, sample_width=sample_width, ways=ways)
+        )
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
 
         max_sample_value = 2**sample_width - 1
+        iterations = 500
+        min = max_sample_value
+        max = 0
+        sum = 0
+        count = 0
+        buckets = [0] * bucket_count
 
-        async def test_process(sim):
-            min = max_sample_value
-            max = 0
-            sum = 0
-            count = 0
+        async def test_process(way: int, sim: TestbenchContext):
+            nonlocal min, max, sum, count
 
-            buckets = [0] * bucket_count
-
-            for _ in range(500):
+            for _ in range(iterations):
                 if random.randrange(3) == 0:
                     value = random.randint(0, max_sample_value)
                     if value < min:
@@ -272,11 +277,18 @@ class TestHwHistogram(TestCaseWithSimulator):
                         if value < 2**i or i == bucket_count - 1:
                             buckets[i] += 1
                             break
-                    await m.method.call(sim, data=value)
+                    await m.add[way].call(sim, sample=value)
                 else:
                     await sim.tick()
+                await sim.delay(1e-12)  # so verify_process reads correct values
 
-                histogram = m._dut.histogram
+        async def verify_process(sim: TestbenchContext):
+            nonlocal min, max, sum, count
+
+            for _ in range(iterations):
+                await sim.tick()
+
+                histogram = m._dut
 
                 assert min == sim.get(histogram.min.value)
                 assert max == sim.get(histogram.max.value)
@@ -293,7 +305,9 @@ class TestHwHistogram(TestCaseWithSimulator):
                 assert total_count == sim.get(histogram.count.value)
 
         with self.run_simulation(m) as sim:
-            sim.add_testbench(test_process)
+            sim.add_testbench(verify_process)
+            for k in range(ways):
+                sim.add_testbench(functools.partial(test_process, k))
 
 
 class TestLatencyMeasurerBase(TestCaseWithSimulator):
@@ -311,6 +325,7 @@ class TestLatencyMeasurerBase(TestCaseWithSimulator):
             assert count == sim.get(m._dut.histogram.buckets[i].value)
 
 
+@pytest.mark.parametrize("ways", [1, 4])
 @pytest.mark.parametrize(
     "slots_number, expected_consumer_wait",
     [
@@ -323,63 +338,71 @@ class TestLatencyMeasurerBase(TestCaseWithSimulator):
     ],
 )
 class TestFIFOLatencyMeasurer(TestLatencyMeasurerBase):
-    def test_latency_measurer(self, slots_number: int, expected_consumer_wait: float):
+    def test_latency_measurer(self, slots_number: int, expected_consumer_wait: float, ways: int):
         random.seed(42)
 
-        m = SimpleTestCircuit(FIFOLatencyMeasurer("latency", slots_number=slots_number, max_latency=300))
+        m = SimpleTestCircuit(FIFOLatencyMeasurer("latency", slots_number=slots_number, max_latency=300, ways=ways))
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
 
         latencies: list[int] = []
 
-        event_queue = queue.Queue()
+        event_queue = [queue.Queue() for _ in range(ways)]
 
-        finish = False
+        finish = [False for _ in range(ways)]
 
-        async def producer(sim: TestbenchContext):
-            nonlocal finish
+        async def producer(way: int, sim: TestbenchContext):
             ticks = DependencyContext.get().get_dependency(TicksKey())
 
-            for _ in range(200):
-                await m.start[0].call(sim)
+            for _ in range(200 // ways):
+                await m.start[way].call(sim)
 
-                event_queue.put(sim.get(ticks))
+                event_queue[way].put(sim.get(ticks))
                 await self.random_wait_geom(sim, 0.8)
 
-            finish = True
+            finish[way] = True
 
-        async def consumer(sim: TestbenchContext):
+        async def consumer(way: int, sim: TestbenchContext):
             ticks = DependencyContext.get().get_dependency(TicksKey())
 
-            while not finish:
-                await m.stop[0].call(sim)
+            while not finish[way]:
+                await m.stop[way].call(sim)
 
-                latencies.append(sim.get(ticks) - event_queue.get())
+                latencies.append(sim.get(ticks) - event_queue[way].get())
 
                 await self.random_wait_geom(sim, 1.0 / expected_consumer_wait)
 
+        async def verifier(sim: TestbenchContext):
+            while not all(finish):
+                await sim.tick()
+
+            await sim.delay(1e-12)  # so that consumer can update global state
             self.check_latencies(sim, m, latencies)
 
         with self.run_simulation(m) as sim:
-            sim.add_testbench(producer)
-            sim.add_testbench(consumer)
+            sim.add_testbench(verifier)
+            for k in range(ways):
+                sim.add_testbench(functools.partial(producer, k))
+                sim.add_testbench(functools.partial(consumer, k))
 
 
 @pytest.mark.parametrize(
-    "slots_number, expected_consumer_wait",
+    "ways, slots_number, expected_consumer_wait",
     [
-        (2, 5),
-        (2, 10),
-        (5, 10),
-        (10, 1),
-        (10, 10),
-        (5, 5),
+        (1, 2, 5),
+        (1, 2, 10),
+        (1, 5, 10),
+        (1, 10, 1),
+        (1, 10, 10),
+        #        (4, 10, 1), TODO
+        #        (4, 10, 10), TODO
+        (1, 5, 5),
     ],
 )
 class TestIndexedLatencyMeasurer(TestLatencyMeasurerBase):
-    def test_latency_measurer(self, slots_number: int, expected_consumer_wait: float):
+    def test_latency_measurer(self, slots_number: int, expected_consumer_wait: float, ways: int):
         random.seed(42)
 
-        m = SimpleTestCircuit(TaggedLatencyMeasurer("latency", slots_number=slots_number, max_latency=300))
+        m = SimpleTestCircuit(TaggedLatencyMeasurer("latency", slots_number=slots_number, max_latency=300, ways=ways))
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
 
         latencies: list[int] = []
@@ -388,53 +411,57 @@ class TestIndexedLatencyMeasurer(TestLatencyMeasurerBase):
         free_slots = list(k for k in range(slots_number))
         used_slots: list[int] = []
 
-        finish = False
+        finish = [False for _ in range(ways)]
 
-        async def producer(sim):
-            nonlocal finish
-
+        async def producer(way: int, sim: TestbenchContext):
             tick_count = DependencyContext.get().get_dependency(TicksKey())
 
             for _ in range(200):
                 while not free_slots:
                     await sim.tick()
-                await sim.delay(1e-9)
+                await sim.delay(1e-12)
 
                 slot_id = random.choice(free_slots)
-                await m.start[0].call(sim, slot=slot_id)
+                free_slots.remove(slot_id)
+                await m.start[way].call(sim, slot=slot_id)
 
                 events[slot_id] = sim.get(tick_count)
-                free_slots.remove(slot_id)
                 used_slots.append(slot_id)
 
                 await self.random_wait_geom(sim, 0.8)
 
-            finish = True
+            finish[way] = True
 
-        async def consumer(sim):
+        async def consumer(way: int, sim: TestbenchContext):
             tick_count = DependencyContext.get().get_dependency(TicksKey())
 
-            while not finish:
+            while not finish[way]:
                 while not used_slots:
                     await sim.tick()
 
                 slot_id = random.choice(used_slots)
+                used_slots.remove(slot_id)
+                await m.stop[way].call(sim, slot=slot_id)
 
-                await m.stop[0].call(sim, slot=slot_id)
-
-                await sim.delay(2e-9)
+                await sim.delay(2e-12)
 
                 latencies.append(sim.get(tick_count) - events[slot_id])
-                used_slots.remove(slot_id)
                 free_slots.append(slot_id)
 
                 await self.random_wait_geom(sim, 1.0 / expected_consumer_wait)
 
+        async def verifier(sim: TestbenchContext):
+            while not all(finish):
+                await sim.tick()
+
+            await sim.delay(3e-12)  # so that consumer can update global state
             self.check_latencies(sim, m, latencies)
 
         with self.run_simulation(m) as sim:
-            sim.add_testbench(producer)
-            sim.add_testbench(consumer)
+            sim.add_testbench(verifier)
+            for k in range(ways):
+                sim.add_testbench(functools.partial(producer, k))
+                sim.add_testbench(functools.partial(consumer, k))
 
 
 class MetricManagerTestCircuit(Elaboratable):
