@@ -374,8 +374,6 @@ class TaggedCounter(Elaboratable, HwMetric):
         Transactron module
     tag: ValueLike
         The tag of the counter.
-    cond: ValueLike
-        When set to high, the counter will be increased. By default set to high.
     """
 
 
