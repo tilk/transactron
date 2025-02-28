@@ -394,8 +394,8 @@ class TestFIFOLatencyMeasurer(TestLatencyMeasurerBase):
         (1, 5, 10),
         (1, 10, 1),
         (1, 10, 10),
-        #        (4, 10, 1), TODO
-        #        (4, 10, 10), TODO
+        (4, 10, 1),
+        (4, 10, 10),
         (1, 5, 5),
     ],
 )
@@ -419,18 +419,18 @@ class TestTaggedLatencyMeasurer(TestLatencyMeasurerBase):
         async def producer(way: int, sim: TestbenchContext):
             tick_count = DependencyContext.get().get_dependency(TicksKey())
 
-            for _ in range(iterations):
+            for _ in range(iterations // ways):
                 while not free_slots:
                     await sim.tick()
 
                 slot_id = random.choice(free_slots)
                 free_slots.remove(slot_id)
-                print("free slot rem", slot_id, "tick", sim.get(tick_count))
                 await m.start[way].call(sim, slot=slot_id)
+
+                await sim.delay(1e-12)
 
                 events[slot_id] = sim.get(tick_count)
                 used_slots.append(slot_id)
-                print("used slot add", slot_id, "tick", sim.get(tick_count))
 
                 await self.random_wait_geom(sim, 0.8)
 
@@ -445,12 +445,12 @@ class TestTaggedLatencyMeasurer(TestLatencyMeasurerBase):
 
                 slot_id = random.choice(used_slots)
                 used_slots.remove(slot_id)
-                print("used slot rem", slot_id, "tick", sim.get(tick_count))
                 await m.stop[way].call(sim, slot=slot_id)
+
+                await sim.delay(1e-12)
 
                 latencies.append(sim.get(tick_count) - events[slot_id])
                 free_slots.append(slot_id)
-                print("free slot add", slot_id, "tick", sim.get(tick_count), "latency", latencies[-1])
 
                 await self.random_wait_geom(sim, 1.0 / expected_consumer_wait, max_cycle_cnt=500)
 
@@ -459,7 +459,6 @@ class TestTaggedLatencyMeasurer(TestLatencyMeasurerBase):
                 await sim.tick()
 
             await sim.delay(3e-12)  # so that consumer can update global state
-            print("checking")
             self.check_latencies(sim, m, latencies)
 
         with self.run_simulation(m) as sim:

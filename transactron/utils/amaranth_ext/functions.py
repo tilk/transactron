@@ -20,6 +20,8 @@ __all__ = [
     "const_of",
     "binary_tree_reduce",
     "sum_value",
+    "or_value",
+    "and_value",
     "generic_min_value",
     "min_value",
     "max_value",
@@ -154,6 +156,14 @@ def binary_tree_reduce(*values: ValueBundle, neutral: Value, operator: Callable[
 
 def sum_value(*values: ValueBundle):
     return binary_tree_reduce(*values, neutral=C(0), operator=operator.add)
+
+
+def or_value(*values: ValueBundle):
+    return binary_tree_reduce(*values, neutral=C(0), operator=operator.or_)
+
+
+def and_value(*values: ValueBundle):
+    return binary_tree_reduce(*values, neutral=C(-1), operator=operator.and_)
 
 
 def generic_min_value(*values: ValueBundle, operator: Callable[[Value, Value], Value]) -> Value:

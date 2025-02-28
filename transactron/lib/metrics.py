@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from amaranth.lib.data import StructLayout
+from amaranth.lib.data import ArrayLayout, StructLayout
 from dataclasses_json import dataclass_json
 from typing import Optional, Type, TypeVar
 from abc import ABC
@@ -12,7 +12,7 @@ from transactron.utils import OneHotSwitchDynamic, ValueBundle
 from transactron import Method, Methods, def_methods, TModule
 from transactron.lib import FIFO, AsyncMemoryBank, logging
 from transactron.utils._typing import MethodStruct
-from transactron.utils.amaranth_ext.functions import max_value, min_value, sum_value, popcount
+from transactron.utils.amaranth_ext.functions import and_value, max_value, min_value, or_value, sum_value, popcount
 from transactron.utils.dependencies import ListKey, DependencyContext, SimpleKey
 
 __all__ = [
@@ -684,12 +684,11 @@ class TaggedLatencyMeasurer(Elaboratable):
         m.submodules.histogram = self.histogram
 
         slots_taken = Signal(self.slots_number)
-        slots_taken_start = Signal.like(slots_taken)
-        slots_taken_stop = Signal.like(slots_taken)
+        slots_taken_start = Signal(ArrayLayout(self.slots_number, len(self.start)))
+        st_stop_init = [2**self.slots_number - 1 for _ in range(len(self.stop))]
+        slots_taken_stop = Signal(ArrayLayout(self.slots_number, len(self.stop)), init=st_stop_init)
 
-        m.d.comb += slots_taken_start.eq(slots_taken)
-        m.d.comb += slots_taken_stop.eq(slots_taken_start)
-        m.d.sync += slots_taken.eq(slots_taken_stop)
+        m.d.sync += slots_taken.eq(or_value(slots_taken_start, and_value(slots_taken_stop, slots_taken)))
 
         epoch = Signal(epoch_width)
 
@@ -697,13 +696,13 @@ class TaggedLatencyMeasurer(Elaboratable):
 
         @def_methods(m, self.start)
         def _(k: int, slot: Value):
-            m.d.comb += slots_taken_start.eq(slots_taken | (1 << slot))
+            m.d.comb += slots_taken_start[k].eq(1 << slot)
             self.log.error(m, (slots_taken & (1 << slot)).any(), "taken slot {} taken again", slot)
             self.slots.write[k](m, addr=slot, data=epoch)
 
         @def_methods(m, self.stop)
         def _(k: int, slot: Value):
-            m.d.comb += slots_taken_stop.eq(slots_taken_start & ~(C(1, self.slots_number) << slot))
+            m.d.comb += slots_taken_stop[k].eq(~(C(1, self.slots_number) << slot))
             self.log.error(m, ~(slots_taken & (1 << slot)).any(), "free slot {} freed again", slot)
             ret = self.slots.read[k](m, addr=slot)
             # The result of substracting two unsigned n-bit is a signed (n+1)-bit value,
