@@ -14,7 +14,6 @@ from transactron.lib import FIFO, AsyncMemoryBank, logging
 from transactron.utils._typing import MethodStruct
 from transactron.utils.amaranth_ext.functions import max_value, min_value, sum_value, popcount
 from transactron.utils.dependencies import ListKey, DependencyContext, SimpleKey
-from transactron.utils.transactron_helpers import make_layout
 
 __all__ = [
     "MetricRegisterModel",
@@ -677,7 +676,7 @@ class TaggedLatencyMeasurer(Elaboratable):
         epoch_width = bits_for(self.max_latency)
 
         m.submodules.slots = self.slots = AsyncMemoryBank(
-            shape=make_layout(("epoch", epoch_width)),
+            shape=epoch_width,
             depth=self.slots_number,
             write_ports=len(self.start),
             read_ports=len(self.stop),
@@ -709,7 +708,7 @@ class TaggedLatencyMeasurer(Elaboratable):
             ret = self.slots.read[k](m, addr=slot)
             # The result of substracting two unsigned n-bit is a signed (n+1)-bit value,
             # so we need to cast the result and discard the most significant bit.
-            duration = (epoch - ret.data.epoch).as_unsigned()[:-1]
+            duration = (epoch - ret.data).as_unsigned()[:-1]
             self.histogram.add[k](m, duration)
 
         return m

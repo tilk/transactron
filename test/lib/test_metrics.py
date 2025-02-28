@@ -388,6 +388,7 @@ class TestFIFOLatencyMeasurer(TestLatencyMeasurerBase):
 @pytest.mark.parametrize(
     "ways, slots_number, expected_consumer_wait",
     [
+        (1, 1, 10),
         (1, 2, 5),
         (1, 2, 10),
         (1, 5, 10),
@@ -398,11 +399,11 @@ class TestFIFOLatencyMeasurer(TestLatencyMeasurerBase):
         (1, 5, 5),
     ],
 )
-class TestIndexedLatencyMeasurer(TestLatencyMeasurerBase):
+class TestTaggedLatencyMeasurer(TestLatencyMeasurerBase):
     def test_latency_measurer(self, slots_number: int, expected_consumer_wait: float, ways: int):
         random.seed(42)
 
-        m = SimpleTestCircuit(TaggedLatencyMeasurer("latency", slots_number=slots_number, max_latency=300, ways=ways))
+        m = SimpleTestCircuit(TaggedLatencyMeasurer("latency", slots_number=slots_number, max_latency=2000, ways=ways))
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
 
         latencies: list[int] = []
@@ -413,20 +414,23 @@ class TestIndexedLatencyMeasurer(TestLatencyMeasurerBase):
 
         finish = [False for _ in range(ways)]
 
+        iterations = 200
+
         async def producer(way: int, sim: TestbenchContext):
             tick_count = DependencyContext.get().get_dependency(TicksKey())
 
-            for _ in range(200):
+            for _ in range(iterations):
                 while not free_slots:
                     await sim.tick()
-                await sim.delay(1e-12)
 
                 slot_id = random.choice(free_slots)
                 free_slots.remove(slot_id)
+                print("free slot rem", slot_id, "tick", sim.get(tick_count))
                 await m.start[way].call(sim, slot=slot_id)
 
                 events[slot_id] = sim.get(tick_count)
                 used_slots.append(slot_id)
+                print("used slot add", slot_id, "tick", sim.get(tick_count))
 
                 await self.random_wait_geom(sim, 0.8)
 
@@ -441,20 +445,21 @@ class TestIndexedLatencyMeasurer(TestLatencyMeasurerBase):
 
                 slot_id = random.choice(used_slots)
                 used_slots.remove(slot_id)
+                print("used slot rem", slot_id, "tick", sim.get(tick_count))
                 await m.stop[way].call(sim, slot=slot_id)
-
-                await sim.delay(2e-12)
 
                 latencies.append(sim.get(tick_count) - events[slot_id])
                 free_slots.append(slot_id)
+                print("free slot add", slot_id, "tick", sim.get(tick_count), "latency", latencies[-1])
 
-                await self.random_wait_geom(sim, 1.0 / expected_consumer_wait)
+                await self.random_wait_geom(sim, 1.0 / expected_consumer_wait, max_cycle_cnt=500)
 
         async def verifier(sim: TestbenchContext):
             while not all(finish):
                 await sim.tick()
 
             await sim.delay(3e-12)  # so that consumer can update global state
+            print("checking")
             self.check_latencies(sim, m, latencies)
 
         with self.run_simulation(m) as sim:
