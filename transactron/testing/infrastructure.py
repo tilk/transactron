@@ -342,9 +342,11 @@ class TestCaseWithSimulator:
         """
         await self.tick(sim, random.randrange(min_cycle_cnt, max_cycle_cnt + 1))
 
-    async def random_wait_geom(self, sim: SimulatorContext, prob: float = 0.5):
+    async def random_wait_geom(self, sim: SimulatorContext, prob: float = 0.5, max_cycle_cnt: int = 2**16):
         """
         Wait till the first success, where there is `prob` probability for success in each cycle.
         """
-        while random.random() > prob:
+        cycle_cnt = 0
+        while random.random() > prob and cycle_cnt < max_cycle_cnt:
             await sim.tick()
+            cycle_cnt += 1

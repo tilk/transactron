@@ -132,5 +132,5 @@ class Transaction(TransactionBase["Transaction | Method"]):
     def __repr__(self) -> str:
         return "(transaction {})".format(self.name)
 
-    def debug_signals(self) -> SignalBundle:
+    def debug_signals(self) -> ValueBundle:
         return [self.request, self.runnable, self.grant]

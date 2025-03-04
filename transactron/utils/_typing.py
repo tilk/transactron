@@ -25,7 +25,7 @@ __all__ = [
     "SrcLoc",
     "MethodLayout",
     "MethodStruct",
-    "SignalBundle",
+    "ValueBundle",
     "LayoutListField",
     "LayoutList",
     "LayoutIterable",
@@ -43,7 +43,7 @@ __all__ = [
 ]
 
 # Internal Coreblocks types
-SignalBundle: TypeAlias = Signal | Record | View | Iterable["SignalBundle"] | Mapping[str, "SignalBundle"]
+ValueBundle: TypeAlias = Value | Record | View | Iterable["ValueBundle"] | Mapping[str, "ValueBundle"]
 LayoutListField: TypeAlias = tuple[str, "ShapeLike | LayoutList"]
 LayoutList: TypeAlias = list["LayoutListField"]
 LayoutIterable: TypeAlias = Iterable["LayoutListField"]
@@ -66,7 +66,7 @@ GraphCC: TypeAlias = set[T]
 
 @runtime_checkable
 class HasDebugSignals(Protocol):
-    def debug_signals(self) -> SignalBundle: ...
+    def debug_signals(self) -> ValueBundle: ...
 
 
 def type_self_kwargs_as(as_func: Callable[Concatenate[Any, P], Any]):
