@@ -206,7 +206,7 @@ def _(foo: Value, bar: Value):
 The other is to receive the argument structure directly. The `arg` name is required:
 
 ```python
-def_method(m, method)
+@def_method(m, method)
 def _(arg: data.View):
     ...
 ```
