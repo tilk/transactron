@@ -3,10 +3,11 @@ from amaranth import *
 from amaranth.hdl import ShapeCastable, ValueCastable
 from amaranth.utils import bits_for, ceil_log2
 from amaranth.lib import data
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
+import operator
 
 from amaranth_types.types import ValueLike, ShapeLike
-from transactron.utils._typing import SignalBundle
+from transactron.utils._typing import ValueBundle
 
 __all__ = [
     "mod_incr",
@@ -17,6 +18,13 @@ __all__ = [
     "flatten_signals",
     "shape_of",
     "const_of",
+    "binary_tree_reduce",
+    "sum_value",
+    "or_value",
+    "and_value",
+    "generic_min_value",
+    "min_value",
+    "max_value",
 ]
 
 
@@ -97,7 +105,7 @@ def cyclic_mask(bits: int, start: Value, end: Value):
     return Mux(start <= end, mask_se, mask_es)
 
 
-def flatten_signals(signals: SignalBundle) -> Iterable[Signal]:
+def flatten_signals(signals: ValueBundle) -> Iterable[Value]:
     """
     Flattens input data, which can be either a signal, a record, a list (or a dict) of SignalBundle items.
 
@@ -132,3 +140,42 @@ def const_of(value: int, shape: ShapeLike) -> Any:
         return shape.from_bits(value)
     else:
         return C(value, Shape.cast(shape))
+
+
+def binary_tree_reduce(*values: ValueBundle, neutral: Value, operator: Callable[[Value, Value], Value]) -> Value:
+    min_layers = list(flatten_signals(values))
+    if not min_layers:
+        min_layers.append(neutral)
+
+    while len(min_layers) > 1:
+        tail = [min_layers[-1]] if len(min_layers) % 2 else []
+        min_layers = [operator(a, b) for a, b in zip(min_layers[::2], min_layers[1::2])] + tail
+
+    return min_layers[0]
+
+
+def sum_value(*values: ValueBundle):
+    return binary_tree_reduce(*values, neutral=C(0), operator=operator.add)
+
+
+def or_value(*values: ValueBundle):
+    return binary_tree_reduce(*values, neutral=C(0), operator=operator.or_)
+
+
+def and_value(*values: ValueBundle):
+    return binary_tree_reduce(*values, neutral=C(-1), operator=operator.and_)
+
+
+def generic_min_value(*values: ValueBundle, operator: Callable[[Value, Value], Value]) -> Value:
+    def binary_min(v1: Value, v2: Value):
+        return Mux(operator(v1, v2), v1, v2)
+
+    return binary_tree_reduce(*values, neutral=C(0), operator=binary_min)
+
+
+def min_value(*values: ValueBundle) -> Value:
+    return generic_min_value(*values, operator=operator.lt)
+
+
+def max_value(*values: ValueBundle) -> Value:
+    return generic_min_value(*values, operator=operator.gt)

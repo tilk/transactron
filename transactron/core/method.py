@@ -243,7 +243,7 @@ class Method(TransactionBase["Transaction | Method"]):
         manager._add_method(self)
 
     def __call__(
-        self, m: TModule, arg: Optional[AssignArg] = None, enable: ValueLike = C(1), /, **kwargs: AssignArg
+        self, m: TModule, arg: Optional[AssignArg] = None, /, enable_call: ValueLike = C(1), **kwargs: AssignArg
     ) -> MethodStruct:
         """Call a method.
 
@@ -261,7 +261,7 @@ class Method(TransactionBase["Transaction | Method"]):
             Call argument. Can be passed as a `View` of the method's
             input layout or as a dictionary. Alternative syntax uses
             keyword arguments.
-        enable : Value
+        enable_call : Value
             Configures the call as enabled in the current clock cycle.
             Disabled calls still lock the called method in transaction
             scheduling. Calls are by default enabled.
@@ -300,7 +300,7 @@ class Method(TransactionBase["Transaction | Method"]):
             arg = kwargs
 
         enable_sig = Signal(name=self.owned_name + "_enable")
-        m.d.av_comb += enable_sig.eq(enable)
+        m.d.av_comb += enable_sig.eq(enable_call)
         m.d.top_comb += assign(arg_rec, arg, fields=AssignType.ALL)
 
         caller = Body.get()
@@ -318,7 +318,7 @@ class Method(TransactionBase["Transaction | Method"]):
     def __repr__(self) -> str:
         return "(method {})".format(self.name)
 
-    def debug_signals(self) -> SignalBundle:
+    def debug_signals(self) -> ValueBundle:
         return [self.ready, self.run, self.data_in, self.data_out]
 
 
@@ -346,11 +346,11 @@ class Methods(Sequence[Method]):
         return self._layout_out
 
     def __call__(
-        self, m: TModule, arg: Optional[AssignArg] = None, enable: ValueLike = C(1), /, **kwargs: AssignArg
+        self, m: TModule, arg: Optional[AssignArg] = None, /, enable_call: ValueLike = C(1), **kwargs: AssignArg
     ) -> MethodStruct:
         if len(self._methods) != 1:
             raise RuntimeError("calling Methods only allowed when count=1")
-        return self._methods[0](m, arg, enable, **kwargs)
+        return self._methods[0](m, arg, enable_call, **kwargs)
 
     @overload
     def __getitem__(self, key: int) -> Method: ...
@@ -364,5 +364,5 @@ class Methods(Sequence[Method]):
     def __len__(self) -> int:
         return len(self._methods)
 
-    def debug_signals(self) -> SignalBundle:
+    def debug_signals(self) -> ValueBundle:
         return {method.name: method.debug_signals() for method in self._methods}

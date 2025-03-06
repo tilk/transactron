@@ -1,13 +1,13 @@
 from typing import Optional
 from amaranth import *
-from ._typing import SignalBundle, HasDebugSignals
+from ._typing import ValueBundle, HasDebugSignals
 from collections.abc import Collection, Mapping
 
 
 __all__ = ["auto_debug_signals"]
 
 
-def auto_debug_signals(thing) -> SignalBundle:
+def auto_debug_signals(thing) -> ValueBundle:
     """Automatic debug signal generation.
 
     Exposes class attributes with debug signals (Amaranth `Signal`\\s,
@@ -16,12 +16,12 @@ def auto_debug_signals(thing) -> SignalBundle:
     tests, for use in ``gtkwave``.
     """
 
-    def auto_debug_signals_internal(thing, *, _visited: set) -> Optional[SignalBundle]:
+    def auto_debug_signals_internal(thing, *, _visited: set) -> Optional[ValueBundle]:
         # Please note, that the set `_visited` is used to memorise visited elements
         # to break reference cycles. There is only one instance of this set, for whole
         # `auto_debug_signals` recursion stack. It is being mutated by adding to it more
         # elements id, so that caller know what was visited by callee.
-        smap: dict[str, SignalBundle] = {}
+        smap: dict[str, ValueBundle] = {}
 
         # Check for reference cycles e.g. Amaranth's MustUse
         if id(thing) in _visited:

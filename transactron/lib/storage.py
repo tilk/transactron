@@ -72,15 +72,14 @@ class MemoryBank(Elaboratable):
         self.shape = shape
         self.depth = depth
         self.granularity = granularity
-        self.addr_width = bits_for(self.depth - 1)
         self.transparent = transparent
         self.reads_ports = read_ports
         self.writes_ports = write_ports
         self.memory_type = memory_type
 
-        self.read_reqs_layout: LayoutList = [("addr", self.addr_width)]
+        self.read_reqs_layout: LayoutList = [("addr", range(self.depth))]
         self.read_resps_layout = make_layout(("data", self.shape))
-        write_layout = [("addr", self.addr_width), ("data", self.shape)]
+        write_layout = [("addr", range(self.depth)), ("data", self.shape)]
         if self.granularity is not None:
             # use Amaranth lib.memory granularity rule checks and width
             amaranth_write_port_sig = memory.WritePort.Signature(
@@ -299,14 +298,13 @@ class AsyncMemoryBank(Elaboratable):
         self.shape = shape
         self.depth = depth
         self.granularity = granularity
-        self.addr_width = bits_for(self.depth - 1)
         self.reads_ports = read_ports
         self.writes_ports = write_ports
         self.memory_type = memory_type
 
-        self.read_reqs_layout: LayoutList = [("addr", self.addr_width)]
+        self.read_reqs_layout: LayoutList = [("addr", range(self.depth))]
         self.read_resps_layout: LayoutList = [("data", self.shape)]
-        write_layout = [("addr", self.addr_width), ("data", self.shape)]
+        write_layout = [("addr", range(self.depth)), ("data", self.shape)]
         if self.granularity is not None:
             # use Amaranth lib.memory granularity rule checks and width
             amaranth_write_port_sig = memory.WritePort.Signature(
