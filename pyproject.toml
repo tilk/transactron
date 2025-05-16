@@ -5,6 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "transactron"
 dynamic = ["version"]
+readme = "README.md"
+description = "Hardware transactions library for Amaranth"
 dependencies = [
     "amaranth == 0.5.4",
     "amaranth-stubs == 0.1.1",
@@ -19,6 +21,11 @@ classifiers = [
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python",
 ]
+
+[project.urls]
+"Documentation" = "https://kuznia-rdzeni.github.io/transactron/"
+"Source Code" = "https://github.com/kuznia-rdzeni/transactron"
+"Bug Tracker" = "https://github.com/kuznia-rdzeni/transactron/issues"
 
 [project.optional-dependencies]
 dev = [
