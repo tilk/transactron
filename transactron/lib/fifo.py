@@ -145,7 +145,13 @@ class WideFifo(Elaboratable):
     """
 
     def __init__(
-        self, shape: ShapeLike, depth: int, read_width: int, write_width: Optional[int], *, src_loc: int | SrcLoc = 0
+        self,
+        shape: ShapeLike,
+        depth: int,
+        read_width: int,
+        write_width: Optional[int] = None,
+        *,
+        src_loc: int | SrcLoc = 0,
     ) -> None:
         """
         Parameters
