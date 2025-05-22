@@ -11,7 +11,6 @@ from amaranth.utils import bits_for, ceil_log2, exact_log2
 from transactron.utils import OneHotSwitchDynamic, ValueBundle
 from transactron import Method, Methods, def_methods, TModule
 from transactron.lib import FIFO, AsyncMemoryBank, logging
-from transactron.utils._typing import MethodStruct
 from transactron.utils.amaranth_ext.functions import and_value, max_value, min_value, or_value, sum_value, popcount
 from transactron.utils.dependencies import ListKey, DependencyContext, SimpleKey
 
@@ -129,6 +128,17 @@ class HwMetricsEnabledKey(SimpleKey[bool]):
     default_value = False
 
 
+# TODO: find a cleaner way to make metric methods disappear when disabled.
+class DummyMethod(Method):
+    """
+    Hacky way to make a method ignore calls, allowing it not to be defined and
+    making it not appear in the final call graph.
+    """
+
+    def __call__(self, *args, **kwargs):
+        return Signal(StructLayout({}))
+
+
 class HwMetric(ABC, MetricModel):
     """
     A base for all metric implementations. It should be only used for declaring
@@ -186,14 +196,11 @@ class HwMetric(ABC, MetricModel):
     def wrap_method(method: _T_Method) -> _T_Method:
         if not HwMetric.metrics_enabled():
 
-            def dummy(*args, **kwargs) -> MethodStruct:
-                return Signal(StructLayout({}))
-
             if isinstance(method, Method):
-                method.__call__ = dummy
+                method.__class__ = DummyMethod
             else:
                 for m in method:
-                    m.__call__ = dummy
+                    m.__class__ = DummyMethod
         return method
 
     # To restore hashability lost by dataclass subclassing
