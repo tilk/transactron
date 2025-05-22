@@ -72,8 +72,8 @@ class TestHwCounter(TestCaseWithSimulator):
         random.seed(42)
 
     def test_counter_in_method(self):
-        m = SimpleTestCircuit(CounterInMethodCircuit())
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
+        m = SimpleTestCircuit(CounterInMethodCircuit())
 
         async def test_process(sim):
             called_cnt = 0
@@ -92,8 +92,8 @@ class TestHwCounter(TestCaseWithSimulator):
             sim.add_testbench(test_process)
 
     def test_counter_with_condition_in_method(self):
-        m = SimpleTestCircuit(CounterWithConditionInMethodCircuit())
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
+        m = SimpleTestCircuit(CounterWithConditionInMethodCircuit())
 
         async def test_process(sim):
             called_cnt = 0
@@ -114,8 +114,8 @@ class TestHwCounter(TestCaseWithSimulator):
 
     @pytest.mark.parametrize("ways", [1, 4])
     def test_counter_with_condition_without_method(self, ways):
-        m = CounterWithoutMethodCircuit(ways)
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
+        m = CounterWithoutMethodCircuit(ways)
 
         async def test_process(sim):
             called_cnt = 0
@@ -170,8 +170,8 @@ class TestTaggedCounter(TestCaseWithSimulator):
         random.seed(42)
 
     def do_test_enum(self, tags: range | Type[Enum] | list[int], tag_values: list[int], ways: int):
-        m = TaggedCounterCircuit(tags, ways)
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
+        m = TaggedCounterCircuit(tags, ways)
 
         counts: dict[int, int] = {}
         for i in tag_values:
@@ -248,10 +248,10 @@ class TestHwHistogram(TestCaseWithSimulator):
     def test_histogram(self, bucket_count: int, sample_width: int, ways: int):
         random.seed(42)
 
+        DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
         m = SimpleTestCircuit(
             HwExpHistogram("histogram", bucket_count=bucket_count, sample_width=sample_width, ways=ways)
         )
-        DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
 
         max_sample_value = 2**sample_width - 1
         iterations = 500
@@ -341,8 +341,8 @@ class TestFIFOLatencyMeasurer(TestLatencyMeasurerBase):
     def test_latency_measurer(self, slots_number: int, expected_consumer_wait: float, ways: int):
         random.seed(42)
 
-        m = SimpleTestCircuit(FIFOLatencyMeasurer("latency", slots_number=slots_number, max_latency=300, ways=ways))
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
+        m = SimpleTestCircuit(FIFOLatencyMeasurer("latency", slots_number=slots_number, max_latency=300, ways=ways))
 
         latencies: list[int] = []
 
@@ -403,8 +403,8 @@ class TestTaggedLatencyMeasurer(TestLatencyMeasurerBase):
     def test_latency_measurer(self, slots_number: int, expected_consumer_wait: float, ways: int):
         random.seed(42)
 
-        m = SimpleTestCircuit(TaggedLatencyMeasurer("latency", slots_number=slots_number, max_latency=2000, ways=ways))
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
+        m = SimpleTestCircuit(TaggedLatencyMeasurer("latency", slots_number=slots_number, max_latency=2000, ways=ways))
 
         latencies: list[int] = []
 
@@ -528,10 +528,9 @@ class TestMetricsManager(TestCaseWithSimulator):
     def test_returned_reg_values(self):
         random.seed(42)
 
+        DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
         m = SimpleTestCircuit(MetricManagerTestCircuit())
         metrics_manager = HardwareMetricsManager()
-
-        DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
 
         async def test_process(sim):
             counters = [0] * 3

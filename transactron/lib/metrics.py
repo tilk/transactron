@@ -123,7 +123,6 @@ class HwMetricsEnabledKey(SimpleKey[bool]):
     none of theirs signals will be synthesized.
     """
 
-    lock_on_get = False
     empty_valid = True
     default_value = False
 
