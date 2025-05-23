@@ -154,7 +154,13 @@ class WideFifo(Elaboratable):
             return self._fifo._storage[index % self._fifo.max_width].data[index // self._fifo.max_width]
 
     def __init__(
-        self, shape: ShapeLike, depth: int, read_width: int, write_width: Optional[int], *, src_loc: int | SrcLoc = 0
+        self,
+        shape: ShapeLike,
+        depth: int,
+        read_width: int,
+        write_width: Optional[int] = None,
+        *,
+        src_loc: int | SrcLoc = 0,
     ) -> None:
         """
         Parameters
