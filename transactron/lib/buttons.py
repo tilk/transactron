@@ -1,13 +1,49 @@
 from amaranth import *
+from amaranth.lib.data import StructLayout
+from amaranth.lib.wiring import Component, In, Out
 
+from transactron.utils._typing import MethodStruct
 from transactron.utils.transactron_helpers import from_method_layout
 from ..core import *
 from ..utils import SrcLoc, get_src_loc, MethodLayout
 
-__all__ = ["ClickIn", "ClickOut"]
+__all__ = ["InputBuffer", "OutputBuffer"]
 
 
-class ClickIn(Elaboratable):
+class BufferBase(Component):
+    trigger: Signal
+    data: MethodStruct
+
+    def __init__(self, layout: StructLayout, direction: bool, edge: bool, polarity: bool, synchronize: bool):
+        if direction:
+            super().__init__({"trigger": In(1), "data": Out(layout)})
+        else:
+            super().__init__({"trigger": In(1), "data": In(layout)})
+        self._edge = edge
+        self._polarity = polarity
+        self._synchronize = synchronize
+
+    def _trigger(self, m: TModule) -> Value:
+        if self._synchronize:
+            trigger = Signal()
+            m.d.sync += trigger.eq(self.trigger)
+        else:
+            trigger = self.trigger
+
+        if not self._polarity:
+            trigger = ~trigger
+
+        if self._edge:
+            old_trigger = Signal()
+            new_trigger = trigger
+            m.d.sync += old_trigger.eq(new_trigger)
+            trigger = Signal()
+            m.d.comb = trigger.eq(new_trigger & ~old_trigger)
+
+        return trigger
+
+
+class InputBuffer(BufferBase):
     """Clicked input.
 
     Useful for interactive simulations or FPGA button/switch interfaces.
@@ -26,46 +62,44 @@ class ClickIn(Elaboratable):
         The data input.
     """
 
-    def __init__(self, layout: MethodLayout, src_loc: int | SrcLoc = 0):
+    def __init__(self, layout: MethodLayout, *, edge: bool = True, polarity: bool = True, synchronize: bool = False, src_loc: int | SrcLoc = 0):
         """
         Parameters
         ----------
         layout: method layout
             The data format for the input.
-        src_loc: int | SrcLoc
+        edge: bool, optional
+            Trigger type. If true, edge triggering, otherwise level triggering.
+            Edge triggering is the default.
+        polarity: bool, optional
+            Trigger polarity. If true, positive trigger (rising edge or high
+            level), otherwise negative trigger (falling edge or low level).
+            Positive trigger is the default.
+        src_loc: int | SrcLoc, optional
             How many stack frames deep the source location is taken from.
             Alternatively, the source location to use instead of the default.
         """
         src_loc = get_src_loc(src_loc)
+        super().__init__(from_method_layout(layout), False, edge, polarity, synchronize)
         self.get = Method(o=layout, src_loc=src_loc)
-        self.btn = Signal()
-        self.dat = Signal(from_method_layout(layout))
 
     def elaborate(self, platform):
         m = TModule()
 
-        btn1 = Signal()
-        btn2 = Signal()
-        dat1 = Signal.like(self.dat)
-        m.d.sync += btn1.eq(self.btn)
-        m.d.sync += btn2.eq(btn1)
-        m.d.sync += dat1.eq(self.dat)
-        get_ready = Signal()
-        get_data = Signal.like(self.dat)
+        if self._synchronize:
+            data = Signal.like(self.data)
+            m.d.sync += data.eq(self.data)
+        else:
+            data = self.data
 
-        @def_method(m, self.get, ready=get_ready)
+        @def_method(m, self.get, ready=self._trigger(m))
         def _():
-            m.d.sync += get_ready.eq(0)
-            return get_data
-
-        with m.If(~btn2 & btn1):
-            m.d.sync += get_ready.eq(1)
-            m.d.sync += get_data.eq(dat1)
+            return data
 
         return m
 
 
-class ClickOut(Elaboratable):
+class OutputBuffer(BufferBase):
     """Clicked output.
 
     Useful for interactive simulations or FPGA button/LED interfaces.
@@ -83,7 +117,7 @@ class ClickOut(Elaboratable):
         The data output.
     """
 
-    def __init__(self, layout: MethodLayout, *, src_loc: int | SrcLoc = 0):
+    def __init__(self, layout: MethodLayout, *, edge: bool = True, polarity: bool = True, synchronize: bool = False, src_loc: int | SrcLoc = 0):
         """
         Parameters
         ----------
@@ -94,20 +128,14 @@ class ClickOut(Elaboratable):
             Alternatively, the source location to use instead of the default.
         """
         src_loc = get_src_loc(src_loc)
+        super().__init__(from_method_layout(layout), False, edge, polarity, synchronize)
         self.put = Method(i=layout, src_loc=src_loc)
-        self.btn = Signal()
-        self.dat = Signal(from_method_layout(layout))
 
     def elaborate(self, platform):
         m = TModule()
 
-        btn1 = Signal()
-        btn2 = Signal()
-        m.d.sync += btn1.eq(self.btn)
-        m.d.sync += btn2.eq(btn1)
-
-        @def_method(m, self.put, ready=~btn2 & btn1)
+        @def_method(m, self.put, ready=self._trigger(m))
         def _(arg):
-            m.d.sync += self.dat.eq(arg)
+            m.d.sync += self.data.eq(arg)
 
         return m
