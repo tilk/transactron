@@ -1,8 +1,7 @@
 from amaranth import *
-from amaranth.lib.data import StructLayout
+from amaranth.lib.data import StructLayout, View
 from amaranth.lib.wiring import Component, In, Out
 
-from transactron.utils._typing import MethodStruct
 from transactron.utils.transactron_helpers import from_method_layout
 from ..core import *
 from ..utils import SrcLoc, get_src_loc, MethodLayout
@@ -12,7 +11,7 @@ __all__ = ["InputSampler", "OutputBuffer"]
 
 class BasicIOBase(Component):
     trigger: Signal
-    data: MethodStruct
+    data: View
 
     def __init__(self, layout: StructLayout, direction: bool, edge: bool, polarity: bool, synchronize: bool):
         if direction:
@@ -34,11 +33,11 @@ class BasicIOBase(Component):
             trigger = ~trigger
 
         if self._edge:
-            old_trigger = Signal()
+            old_trigger = Signal(init=not self._polarity)
             new_trigger = trigger
             m.d.sync += old_trigger.eq(new_trigger)
             trigger = Signal()
-            m.d.comb = trigger.eq(new_trigger & ~old_trigger)
+            m.d.comb += trigger.eq(new_trigger & ~old_trigger)
 
         return trigger
 
