@@ -79,8 +79,46 @@ class MethodMap(Elaboratable, Transformer):
         The transformed method.
     """
 
+    target: Required[Method]
+    method: Provided[Method]
+
     def __init__(
         self,
+        i_layout: MethodLayout = (),
+        o_layout: MethodLayout = (),
+        *,
+        i_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], RecordDict]]] = None,
+        o_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], RecordDict]]] = None,
+        src_loc: int | SrcLoc = 0,
+    ):
+        """
+        Parameters
+        ----------
+        i_transform: (method layout, function or Method), optional
+            Input mapping function. If specified, it should be a pair of a
+            function and a input layout for the transformed method.
+            If not present, input is passed unmodified.
+        o_transform: (method layout, function or Method), optional
+            Output mapping function. If specified, it should be a pair of a
+            function and a output layout for the transformed method.
+            If not present, output is passed unmodified.
+        src_loc: int | SrcLoc
+            How many stack frames deep the source location is taken from.
+            Alternatively, the source location to use instead of the default.
+        """
+        if i_transform is None:
+            i_transform = (i_layout, lambda _, x: x)
+        if o_transform is None:
+            o_transform = (o_layout, lambda _, x: x)
+
+        self.target = Method(i=i_layout, o=o_layout)
+        src_loc = get_src_loc(src_loc)
+        self.method = Method(i=i_transform[0], o=o_transform[0], src_loc=src_loc)
+        self.i_fun = i_transform[1]
+        self.o_fun = o_transform[1]
+
+    @staticmethod
+    def create(
         target: Method,
         *,
         i_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], RecordDict]]] = None,
@@ -104,16 +142,7 @@ class MethodMap(Elaboratable, Transformer):
             How many stack frames deep the source location is taken from.
             Alternatively, the source location to use instead of the default.
         """
-        if i_transform is None:
-            i_transform = (target.layout_in, lambda _, x: x)
-        if o_transform is None:
-            o_transform = (target.layout_out, lambda _, x: x)
-
-        self.target = target
-        src_loc = get_src_loc(src_loc)
-        self.method = Method(i=i_transform[0], o=o_transform[0], src_loc=src_loc)
-        self.i_fun = i_transform[1]
-        self.o_fun = o_transform[1]
+        pass
 
     def elaborate(self, platform):
         m = TModule()
@@ -207,22 +236,34 @@ class MethodFilter(Elaboratable, Transformer):
 
 
 class MethodProduct(Elaboratable, Unifier):
+    """Method product.
+
+    Takes arbitrary, non-zero number of target methods, and constructs
+    a method which calls all of the target methods using the same
+    argument. The return value of the resulting method is, by default,
+    the return value of the first of the target methods. A combiner
+    function can be passed, which can compute the return value from
+    the results of every target method.
+
+    Attributes
+    ----------
+    method: Method
+        The product method.
+    """
+
+    targets: Required[Methods]
+    method: Provided[Method]
+
     def __init__(
         self,
-        targets: list[Method],
+        count: int = 1,
+        i_layout: MethodLayout = (),
+        o_layout: MethodLayout = (),
         combiner: Optional[tuple[MethodLayout, Callable[[TModule, list[MethodStruct]], RecordDict]]] = None,
         *,
         src_loc: int | SrcLoc = 0,
     ):
-        """Method product.
-
-        Takes arbitrary, non-zero number of target methods, and constructs
-        a method which calls all of the target methods using the same
-        argument. The return value of the resulting method is, by default,
-        the return value of the first of the target methods. A combiner
-        function can be passed, which can compute the return value from
-        the results of every target method.
-
+        """
         Parameters
         ----------
         targets: list[Method]
@@ -234,18 +275,33 @@ class MethodProduct(Elaboratable, Unifier):
         src_loc: int | SrcLoc
             How many stack frames deep the source location is taken from.
             Alternatively, the source location to use instead of the default.
-
-        Attributes
-        ----------
-        method: Method
-            The product method.
         """
         if combiner is None:
-            combiner = (targets[0].layout_out, lambda _, x: x[0])
-        self.targets = targets
+            combiner = (o_layout, lambda _, x: x[0])
+        self.targets = Methods(count, i=i_layout, o=o_layout)
         self.combiner = combiner
         src_loc = get_src_loc(src_loc)
-        self.method = Method(i=targets[0].layout_in, o=combiner[0], src_loc=src_loc)
+        self.method = Method(i=i_layout, o=combiner[0], src_loc=src_loc)
+
+    @staticmethod
+    def create(
+        m: TModule,
+        targets: Iterable[Method],
+        combiner: Optional[tuple[MethodLayout, Callable[[TModule, list[MethodStruct]], RecordDict]]] = None,
+        *,
+        name: Optional[str] = None,
+        src_loc: int | SrcLoc = 0,
+    ):
+        targets = list(targets)
+        tr = MethodProduct(
+            len(targets), i_layout=targets[0].layout_in, o_layout=targets[0].layout_out, combiner=combiner
+        )
+        tr.targets.proxy(m, targets)
+        if name is not None:
+            m.submodules[name] = tr
+        else:
+            m.submodules += tr
+        return tr.method
 
     def elaborate(self, platform):
         m = TModule()

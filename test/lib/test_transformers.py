@@ -151,49 +151,23 @@ class TestMethodFilter(TestCaseWithSimulator):
             sim.add_testbench(self.source)
 
 
-class MethodProductTestCircuit(Elaboratable):
-    def __init__(self, iosize: int, targets: int, add_combiner: bool):
-        self.iosize = iosize
-        self.targets = targets
-        self.add_combiner = add_combiner
-        self.target: list[TestbenchIO] = []
-
-    def elaborate(self, platform):
-        m = TModule()
-
-        layout = data_layout(self.iosize)
-
-        methods = []
-
-        for k in range(self.targets):
-            tgt = TestbenchIO(Adapter.create(i=layout, o=layout))
-            methods.append(tgt.adapter.iface)
-            self.target.append(tgt)
-            m.submodules += tgt
-
-        combiner = None
-        if self.add_combiner:
-            combiner = (layout, lambda _, vs: {"data": sum(x.data for x in vs)})
-
-        product = MethodProduct(methods, combiner)
-
-        m.submodules.method = self.method = TestbenchIO(AdapterTrans(product.use(m)))
-
-        return m
-
-
 class TestMethodProduct(TestCaseWithSimulator):
     @pytest.mark.parametrize("targets, add_combiner", [(1, False), (2, False), (5, True)])
     def test_method_product(self, targets: int, add_combiner: bool):
         random.seed(14)
 
         iosize = 8
-        m = MethodProductTestCircuit(iosize, targets, add_combiner)
+        layout = data_layout(iosize)
+        combiner = None
+        if add_combiner:
+            combiner = (layout, lambda _, vs: {"data": sum(x.data for x in vs)})
+
+        m = SimpleTestCircuit(MethodProduct(targets, layout, layout, combiner))
 
         method_en = [False] * targets
 
         def target_process(k: int):
-            @def_method_mock(lambda: m.target[k], enable=lambda: method_en[k])
+            @def_method_mock(lambda: m.targets[k], enable=lambda: method_en[k])
             def mock(data):
                 return {"data": data + k}
 
