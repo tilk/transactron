@@ -3,7 +3,7 @@ from amaranth import *
 from transactron.utils.transactron_helpers import get_src_loc
 from ..core import *
 from ..utils import SrcLoc
-from typing import Optional, Protocol
+from typing import Iterable, Optional, Protocol
 from collections.abc import Callable
 from transactron.utils import (
     ValueLike,
@@ -15,7 +15,7 @@ from transactron.utils import (
     MethodLayout,
     RecordDict,
 )
-from .connectors import Forwarder, ManyToOneConnectTrans, ConnectTrans
+from .connectors import Forwarder, CrossbarConnectTrans, ConnectTrans
 from .simultaneous import condition
 
 __all__ = [
@@ -333,18 +333,18 @@ class Collector(Elaboratable, Unifier):
         Method which returns single result of provided methods.
     """
 
-    def __init__(self, targets: list[Method], *, src_loc: int | SrcLoc = 0):
+    def __init__(self, targets: Iterable[Method], *, src_loc: int | SrcLoc = 0):
         """
         Parameters
         ----------
-        method_list: list[Method]
+        targets: Iterable[Method]
             List of methods from which results will be collected.
         src_loc: int | SrcLoc
             How many stack frames deep the source location is taken from.
             Alternatively, the source location to use instead of the default.
         """
-        self.method_list = targets
-        layout = targets[0].layout_out
+        self.targets = list(targets)
+        layout = self.targets[0].layout_out
         self.src_loc = get_src_loc(src_loc)
         self.method = Method(o=layout, src_loc=self.src_loc)
 
@@ -357,9 +357,7 @@ class Collector(Elaboratable, Unifier):
 
         m.submodules.forwarder = forwarder = Forwarder(self.method.layout_out, src_loc=self.src_loc)
 
-        m.submodules.connect = ManyToOneConnectTrans(
-            get_results=[get for get in self.method_list], put_result=forwarder.write, src_loc=self.src_loc
-        )
+        CrossbarConnectTrans.create(m, self.targets, forwarder.write, name="connect", src_loc=self.src_loc)
 
         self.method.proxy(forwarder.read)
 
@@ -451,7 +449,7 @@ class ConnectAndMapTrans(Elaboratable):
             o_transform=(self.method1.layout_in, self.o_fun),
             src_loc=self.src_loc,
         )
-        m.submodules.connect = ConnectTrans(self.method1, transformer.method)
+        ConnectTrans.create(m, self.method1, transformer.method, name="connect", src_loc=self.src_loc)
 
         return m
 
