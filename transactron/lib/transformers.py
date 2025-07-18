@@ -119,10 +119,12 @@ class MethodMap(Elaboratable, Transformer):
 
     @staticmethod
     def create(
+        m: TModule,
         target: Method,
         *,
         i_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], RecordDict]]] = None,
         o_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], RecordDict]]] = None,
+        name: Optional[str] = None,
         src_loc: int | SrcLoc = 0,
     ):
         """
@@ -142,7 +144,16 @@ class MethodMap(Elaboratable, Transformer):
             How many stack frames deep the source location is taken from.
             Alternatively, the source location to use instead of the default.
         """
-        pass
+        src_loc = get_src_loc(src_loc)
+        tr = MethodMap(
+            target.layout_in, target.layout_out, i_transform=i_transform, o_transform=o_transform, src_loc=src_loc
+        )
+        tr.target.proxy(m, target)
+        if name is not None:
+            m.submodules[name] = tr
+        else:
+            m.submodules += tr
+        return tr.method
 
     def elaborate(self, platform):
         m = TModule()
@@ -173,9 +184,13 @@ class MethodFilter(Elaboratable, Transformer):
         The transformed method.
     """
 
+    target: Required[Method]
+    method: Provided[Method]
+
     def __init__(
         self,
-        target: Method,
+        i_layout: MethodLayout,
+        o_layout: MethodLayout,
         condition: Callable[[TModule, MethodStruct], ValueLike],
         default: Optional[RecordDict] = None,
         *,
@@ -201,17 +216,36 @@ class MethodFilter(Elaboratable, Transformer):
             How many stack frames deep the source location is taken from.
             Alternatively, the source location to use instead of the default.
         """
-        if default is None:
-            default = Signal.like(target.data_out)
-
-        self.target = target
+        self.target = Method(i=i_layout, o=o_layout)
         self.use_condition = use_condition
         src_loc = get_src_loc(src_loc)
-        self.method = Method(i=target.layout_in, o=target.layout_out, src_loc=src_loc)
+        self.method = Method(i=i_layout, o=o_layout, src_loc=src_loc)
         self.condition = condition
-        self.default = default
+        self.default = default if default is not None else Signal(self.target.layout_out)
 
         assert not (use_condition and isinstance(condition, Method))
+
+    @staticmethod
+    def create(
+        m: TModule,
+        target: Method,
+        condition: Callable[[TModule, MethodStruct], ValueLike],
+        default: Optional[RecordDict] = None,
+        *,
+        use_condition: bool = False,
+        name: Optional[str] = None,
+        src_loc: int | SrcLoc = 0,
+    ):
+        src_loc = get_src_loc(src_loc)
+        tr = MethodFilter(
+            target.layout_in, target.layout_out, condition, default, use_condition=use_condition, src_loc=src_loc
+        )
+        tr.target.proxy(m, target)
+        if name is not None:
+            m.submodules[name] = tr
+        else:
+            m.submodules += tr
+        return tr.method
 
     def elaborate(self, platform):
         m = TModule()
@@ -293,8 +327,13 @@ class MethodProduct(Elaboratable, Unifier):
         src_loc: int | SrcLoc = 0,
     ):
         targets = list(targets)
+        src_loc = get_src_loc(src_loc)
         tr = MethodProduct(
-            len(targets), i_layout=targets[0].layout_in, o_layout=targets[0].layout_out, combiner=combiner
+            len(targets),
+            i_layout=targets[0].layout_in,
+            o_layout=targets[0].layout_out,
+            combiner=combiner,
+            src_loc=src_loc,
         )
         tr.targets.proxy(m, targets)
         if name is not None:
