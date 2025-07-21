@@ -86,6 +86,7 @@ class TransactionManager(Elaboratable):
     def __init__(self, cc_scheduler: TransactionScheduler = eager_deterministic_cc_scheduler):
         self.transactions: list[Transaction] = []
         self.methods: list[Method] = []
+        self.proxy_methods: list[Method] = []
         self.cc_scheduler = cc_scheduler
 
     def _add_transaction(self, transaction: Transaction):
@@ -93,6 +94,9 @@ class TransactionManager(Elaboratable):
 
     def _add_method(self, method: Method):
         self.methods.append(method)
+
+    def _add_proxy_method(self, method: Method):
+        self.proxy_methods.append(method)
 
     @staticmethod
     def _conflict_graph(method_map: MethodMap) -> tuple[TransactionGraph, PriorityOrder]:
@@ -307,7 +311,8 @@ class TransactionManager(Elaboratable):
 
         for transaction in joined_transactions:
             method = Method(name=transaction.name, src_loc=transaction.src_loc)
-            method._set_impl(m, transaction)
+            method._set_impl(transaction)
+            self.proxy_methods.append(method)
             methods[transaction] = method
 
         # step 5: construct merged transactions
@@ -347,6 +352,12 @@ class TransactionManager(Elaboratable):
 
         for elem in method_map.methods_and_transactions:
             elem._set_method_uses(m)
+
+        for method in chain(self.methods, self.proxy_methods):
+            m.d.comb += method.ready.eq(method._body.ready)
+            m.d.comb += method.run.eq(method._body.run)
+            m.d.comb += method.data_in.eq(method._body.data_in)
+            m.d.comb += method.data_out.eq(method._body.data_out)
 
         for transaction in method_map.transactions:
             ready = [

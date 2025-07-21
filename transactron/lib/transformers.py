@@ -361,7 +361,7 @@ class Collector(Elaboratable, Unifier):
             get_results=[get for get in self.method_list], put_result=forwarder.write, src_loc=self.src_loc
         )
 
-        self.method.proxy(m, forwarder.read)
+        self.method.proxy(forwarder.read)
 
         return m
 
