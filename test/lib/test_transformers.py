@@ -69,8 +69,8 @@ class TestMethodMap(TestCaseWithSimulator):
             sim.add_testbench(self.source)
 
     def test_method_transformer_methods(self):
-        imeth = TestbenchIO(Adapter.create(i=self.layout, o=self.layout))
-        ometh = TestbenchIO(Adapter.create(i=self.layout, o=self.layout))
+        imeth = TestbenchIO(Adapter(i=self.layout, o=self.layout))
+        ometh = TestbenchIO(Adapter(i=self.layout, o=self.layout))
 
         @def_method_mock(lambda: imeth)
         def imeth_mock(data):
@@ -111,7 +111,7 @@ class TestMethodFilter(TestCaseWithSimulator):
         return {"data": data + 1}
 
     def test_method_filter_with_methods(self):
-        cmeth = TestbenchIO(Adapter.create(i=self.layout, o=data_layout(1)))
+        cmeth = TestbenchIO(Adapter(i=self.layout, o=data_layout(1)))
 
         @def_method_mock(lambda: cmeth)
         def cmeth_mock(data):
@@ -239,7 +239,7 @@ class NonexclusiveWrapperTestCircuit(Elaboratable):
 
         layout = data_layout(self.iosize)
 
-        m.submodules.target = self.target = TestbenchIO(Adapter.create(i=layout, o=layout))
+        m.submodules.target = self.target = TestbenchIO(Adapter(i=layout, o=layout))
 
         for i in range(self.wrappers):
             nonex = NonexclusiveWrapper(self.target.adapter.iface).use(m)
@@ -247,7 +247,7 @@ class NonexclusiveWrapperTestCircuit(Elaboratable):
             self.sources.append(sources)
 
             for j in range(self.callers):
-                m.submodules[f"source_{i}_{j}"] = source = TestbenchIO(AdapterTrans(nonex))
+                m.submodules[f"source_{i}_{j}"] = source = TestbenchIO(AdapterTrans.create(nonex))
                 sources.append(source)
 
         return m
