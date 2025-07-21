@@ -288,7 +288,7 @@ class MethodProduct(Elaboratable, Unifier):
         """
         Parameters
         ----------
-        targets: list[Method]
+        targets: Iterable[Method]
             A list of methods to be called.
         combiner: (int or method layout, function), optional
             A pair of the output layout and the combiner function. The
@@ -338,48 +338,82 @@ class MethodProduct(Elaboratable, Unifier):
 
 
 class MethodTryProduct(Elaboratable, Unifier):
+    """Method product with optional calling.
+
+    Takes arbitrary, non-zero number of target methods, and constructs
+    a method which tries to call all of the target methods using the same
+    argument. The methods which are not ready are not called. The return
+    value of the resulting method is, by default, empty. A combiner
+    function can be passed, which can compute the return value from the
+    results of every target method.
+
+    Attributes
+    ----------
+    method: Method
+        The product method.
+    """
+
+    targets: Required[Methods]
+    method: Provided[Method]
+
     def __init__(
         self,
-        targets: list[Method],
+        count: int = 1,
+        i_layout: MethodLayout = (),
+        o_layout: MethodLayout = (),
         combiner: Optional[
             tuple[MethodLayout, Callable[[TModule, list[tuple[Value, MethodStruct]]], RecordDict]]
         ] = None,
         *,
         src_loc: int | SrcLoc = 0,
     ):
-        """Method product with optional calling.
-
-        Takes arbitrary, non-zero number of target methods, and constructs
-        a method which tries to call all of the target methods using the same
-        argument. The methods which are not ready are not called. The return
-        value of the resulting method is, by default, empty. A combiner
-        function can be passed, which can compute the return value from the
-        results of every target method.
-
+        """
         Parameters
         ----------
-        targets: list[Method]
-            A list of methods to be called.
         combiner: (int or method layout, function), optional
             A pair of the output layout and the combiner function. The
-            combiner function takes two parameters: a `Module` and
+            combiner function takes two parameters: a `TModule` and
             a list of pairs. Each pair contains a bit which signals
             that a given call succeeded, and the result of the call.
         src_loc: int | SrcLoc
             How many stack frames deep the source location is taken from.
             Alternatively, the source location to use instead of the default.
-
-        Attributes
-        ----------
-        method: Method
-            The product method.
         """
         if combiner is None:
             combiner = ([], lambda _, __: {})
-        self.targets = targets
+        self.targets = Methods(count, i=i_layout, o=o_layout)
         self.combiner = combiner
         self.src_loc = get_src_loc(src_loc)
-        self.method = Method(i=targets[0].layout_in, o=combiner[0], src_loc=self.src_loc)
+        self.method = Method(i=i_layout, o=combiner[0], src_loc=self.src_loc)
+
+    @staticmethod
+    def create(
+        targets: Iterable[Method],
+        combiner: Optional[
+            tuple[MethodLayout, Callable[[TModule, list[tuple[Value, MethodStruct]]], RecordDict]]
+        ] = None,
+        *,
+        src_loc: int | SrcLoc = 0,
+    ):
+        """
+        Parameters
+        ----------
+        targets: Iterable[Method]
+            A list of methods to be called.
+        combiner: (int or method layout, function), optional
+            A pair of the output layout and the combiner function. The
+            combiner function takes two parameters: a `TModule` and
+            a list of pairs. Each pair contains a bit which signals
+            that a given call succeeded, and the result of the call.
+        src_loc: int | SrcLoc
+            How many stack frames deep the source location is taken from.
+            Alternatively, the source location to use instead of the default.
+        """
+        targets = list(targets)
+        src_loc = get_src_loc(src_loc)
+        tr = MethodTryProduct(len(targets), targets[0].layout_in, targets[0].layout_out, combiner, src_loc=src_loc)
+        tr.targets.proxy(targets)
+        return tr
 
     def elaborate(self, platform):
         m = TModule()
