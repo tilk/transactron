@@ -119,12 +119,10 @@ class MethodMap(Elaboratable, Transformer):
 
     @staticmethod
     def create(
-        m: TModule,
         target: Method,
         *,
         i_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], RecordDict]]] = None,
         o_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], RecordDict]]] = None,
-        name: Optional[str] = None,
         src_loc: int | SrcLoc = 0,
     ):
         """
@@ -148,12 +146,8 @@ class MethodMap(Elaboratable, Transformer):
         tr = MethodMap(
             target.layout_in, target.layout_out, i_transform=i_transform, o_transform=o_transform, src_loc=src_loc
         )
-        tr.target.proxy(m, target)
-        if name is not None:
-            m.submodules[name] = tr
-        else:
-            m.submodules += tr
-        return tr.method
+        tr.target.proxy(target)
+        return tr
 
     def elaborate(self, platform):
         m = TModule()
@@ -227,25 +221,19 @@ class MethodFilter(Elaboratable, Transformer):
 
     @staticmethod
     def create(
-        m: TModule,
         target: Method,
         condition: Callable[[TModule, MethodStruct], ValueLike],
         default: Optional[RecordDict] = None,
         *,
         use_condition: bool = False,
-        name: Optional[str] = None,
         src_loc: int | SrcLoc = 0,
     ):
         src_loc = get_src_loc(src_loc)
         tr = MethodFilter(
             target.layout_in, target.layout_out, condition, default, use_condition=use_condition, src_loc=src_loc
         )
-        tr.target.proxy(m, target)
-        if name is not None:
-            m.submodules[name] = tr
-        else:
-            m.submodules += tr
-        return tr.method
+        tr.target.proxy(target)
+        return tr
 
     def elaborate(self, platform):
         m = TModule()
@@ -319,11 +307,9 @@ class MethodProduct(Elaboratable, Unifier):
 
     @staticmethod
     def create(
-        m: TModule,
         targets: Iterable[Method],
         combiner: Optional[tuple[MethodLayout, Callable[[TModule, list[MethodStruct]], RecordDict]]] = None,
         *,
-        name: Optional[str] = None,
         src_loc: int | SrcLoc = 0,
     ):
         targets = list(targets)
@@ -335,12 +321,8 @@ class MethodProduct(Elaboratable, Unifier):
             combiner=combiner,
             src_loc=src_loc,
         )
-        tr.targets.proxy(m, targets)
-        if name is not None:
-            m.submodules[name] = tr
-        else:
-            m.submodules += tr
-        return tr.method
+        tr.targets.proxy(targets)
+        return tr
 
     def elaborate(self, platform):
         m = TModule()
@@ -451,8 +433,7 @@ class Collector(Elaboratable, Unifier):
         m = TModule()
 
         m.submodules.forwarder = forwarder = Forwarder(self.method.layout_out, src_loc=self.src_loc)
-
-        CrossbarConnectTrans.create(m, self.targets, forwarder.write, name="connect", src_loc=self.src_loc)
+        m.submodules.connect = CrossbarConnectTrans.create(self.targets, forwarder.write, src_loc=self.src_loc)
 
         self.method.proxy(forwarder.read)
 
@@ -538,13 +519,13 @@ class ConnectAndMapTrans(Elaboratable):
     def elaborate(self, platform):
         m = TModule()
 
-        m.submodules.transformer = transformer = MethodMap(
+        m.submodules.transformer = transformer = MethodMap.create(
             self.method2,
             i_transform=(self.method1.layout_out, self.i_fun),
             o_transform=(self.method1.layout_in, self.o_fun),
             src_loc=self.src_loc,
         )
-        ConnectTrans.create(m, self.method1, transformer.method, name="connect", src_loc=self.src_loc)
+        m.submodules.connect = ConnectTrans.create(self.method1, transformer.method, src_loc=self.src_loc)
 
         return m
 

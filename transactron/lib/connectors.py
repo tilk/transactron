@@ -1,5 +1,4 @@
 from collections.abc import Iterable
-from typing import Optional
 from amaranth import *
 from amaranth.lib.data import View
 import amaranth.lib.fifo
@@ -303,30 +302,22 @@ class ConnectTrans(Elaboratable):
         self.src_loc = get_src_loc(src_loc)
 
     @staticmethod
-    def create(m: TModule, method1: Method, method2: Method, *, name: Optional[str] = None, src_loc: int | SrcLoc = 0):
+    def create(method1: Method, method2: Method, *, src_loc: int | SrcLoc = 0):
         """
         Parameters
         ----------
-        m: TModule
-            Transactron module.
         method1: Method
             First method.
         method2: Method
             Second method.
-        name: str, optional
-            Submodule name. If not given, submodule added as anonymous.
         src_loc: int | SrcLoc
             How many stack frames deep the source location is taken from.
             Alternatively, the source location to use instead of the default.
         """
         ct = ConnectTrans(method1.layout_in, method1.layout_out, src_loc=get_src_loc(src_loc))
-        ct.method1.proxy(m, method1)
-        ct.method2.proxy(m, method2)
-
-        if name is not None:
-            m.submodules[name] = ct
-        else:
-            m.submodules += ct
+        ct.method1.proxy(method1)
+        ct.method2.proxy(method2)
+        return ct
 
     def elaborate(self, platform):
         m = TModule()
@@ -383,13 +374,22 @@ class CrossbarConnectTrans(Elaboratable):
 
     @staticmethod
     def create(
-        m: TModule,
         methods1: Method | Iterable[Method],
         methods2: Method | Iterable[Method],
         *,
-        name: Optional[str] = None,
         src_loc: int | SrcLoc = 0,
     ):
+        """
+        Parameters
+        ----------
+        method1: Method | Iterable[Method]
+            First method or set of methods.
+        method2: Method | Iterable[Method]
+            Second method or set of methods.
+        src_loc: int | SrcLoc
+            How many stack frames deep the source location is taken from.
+            Alternatively, the source location to use instead of the default.
+        """
         if isinstance(methods1, Method):
             methods1 = [methods1]
         if isinstance(methods2, Method):
@@ -406,20 +406,16 @@ class CrossbarConnectTrans(Elaboratable):
             o_layout=methods1[0].layout_out,
         )
         for cct_method1, method1 in zip(cct.methods1, methods1):
-            cct_method1.proxy(m, method1)
+            cct_method1.proxy(method1)
         for cct_method2, method2 in zip(cct.methods2, methods2):
-            cct_method2.proxy(m, method2)
-
-        if name is not None:
-            m.submodules[name] = cct
-        else:
-            m.submodules += cct
+            cct_method2.proxy(method2)
+        return cct
 
     def elaborate(self, platform):
         m = TModule()
 
         for i, method1 in enumerate(self.methods1):
             for j, method2 in enumerate(self.methods2):
-                ConnectTrans.create(m, method1, method2, name=f"connect_{i}_{j}", src_loc=self.src_loc)
+                m.submodules[f"connect_{i}_{j}"] = ConnectTrans.create(method1, method2, src_loc=self.src_loc)
 
         return m
