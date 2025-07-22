@@ -303,7 +303,8 @@ class ConnectTrans(Elaboratable):
 
     @staticmethod
     def create(method1: Method, method2: Method, *, src_loc: int | SrcLoc = 0):
-        """
+        """Creates a `ConnectTrans` which connects two given methods.
+
         Parameters
         ----------
         method1: Method
@@ -379,7 +380,8 @@ class CrossbarConnectTrans(Elaboratable):
         *,
         src_loc: int | SrcLoc = 0,
     ):
-        """
+        """Creates a `CrossbarConnectTrans` which connects two sets of methods.
+
         Parameters
         ----------
         method1: Method | Iterable[Method]

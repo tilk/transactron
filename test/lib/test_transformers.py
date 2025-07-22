@@ -242,7 +242,7 @@ class NonexclusiveWrapperTestCircuit(Elaboratable):
         m.submodules.target = self.target = TestbenchIO(Adapter(i=layout, o=layout))
 
         for i in range(self.wrappers):
-            nonex = NonexclusiveWrapper(self.target.adapter.iface).use(m)
+            nonex = NonexclusiveWrapper.create(self.target.adapter.iface).use(m)
             sources = []
             self.sources.append(sources)
 

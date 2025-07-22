@@ -36,8 +36,11 @@ class AdapterBase(Component):
 class AdapterTrans(AdapterBase):
     """Adapter transaction.
 
-    Creates a transaction controlled by plain Amaranth signals. Allows to
-    expose a method to plain Amaranth code, including testbenches.
+    Creates a transaction controlled by plain Amaranth signals which calls
+    a single method, `iface`. Allows to expose a method to plain Amaranth
+    code, including testbenches.
+
+    To expose an existing method, construct the `AdapterTrans` using `create`.
 
     Attributes
     ----------
@@ -53,6 +56,7 @@ class AdapterTrans(AdapterBase):
     """
 
     iface: Required[Method]
+    """The method called by the `AdapterTrans`."""
 
     def __init__(
         self, name: Optional[str] = None, i: MethodLayout = [], o: MethodLayout = [], src_loc: int | SrcLoc = 0
@@ -76,7 +80,8 @@ class AdapterTrans(AdapterBase):
 
     @staticmethod
     def create(method: Method, *, src_loc: int | SrcLoc = 0):
-        """
+        """Creates an `AdapterTrans` which calls a given method.
+
         Parameters
         ----------
         method: Method
@@ -111,6 +116,9 @@ class Adapter(AdapterBase):
     Creates a method controlled by plain Amaranth signals. One of the
     possible uses is to mock a method in a testbench.
 
+    To control an existing (but not yet defined) method, construct the
+    `Adapter` using `create`.
+
     Attributes
     ----------
     en: Signal, in
@@ -126,6 +134,7 @@ class Adapter(AdapterBase):
     """
 
     iface: Provided[Method]
+    """The method defined and controlled by the `Adapter`."""
 
     def __init__(
         self,
@@ -159,7 +168,8 @@ class Adapter(AdapterBase):
 
     @staticmethod
     def create(method: Method, /, *, src_loc: int | SrcLoc = 0, **kwargs: Unpack[AdapterBodyParams]):
-        """
+        """Creates an `Adapter` which defines a given method.
+
         Parameters
         ----------
         method: Method
