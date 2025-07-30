@@ -113,8 +113,8 @@ class BasicFifo(Elaboratable):
         m.d.comb += next_read_idx.eq(mod_incr(self.read_idx, self.depth))
 
         m.submodules.data = self.data
-        self.buff_wrport = self.data.write_port()
-        self.buff_rdport = self.data.read_port(domain="sync", transparent_for=[self.buff_wrport])
+        data_wrport = self.data.write_port()
+        data_rdport = self.data.read_port(domain="sync", transparent_for=[data_wrport])
 
         read_ready = Signal()
         write_ready = Signal()
@@ -129,14 +129,14 @@ class BasicFifo(Elaboratable):
         with m.If(self.clear.run):
             m.d.sync += self.level.eq(0)
 
-        m.d.comb += self.buff_rdport.addr.eq(Mux(self.read.run, next_read_idx, self.read_idx))
-        m.d.comb += self.head.eq(self.buff_rdport.data)
+        m.d.comb += data_rdport.addr.eq(Mux(self.read.run, next_read_idx, self.read_idx))
+        m.d.comb += self.head.eq(data_rdport.data)
 
         @def_method(m, self.write, ready=write_ready)
         def _(arg: MethodStruct) -> None:
-            m.d.top_comb += self.buff_wrport.addr.eq(self.write_idx)
-            m.d.top_comb += self.buff_wrport.data.eq(arg)
-            m.d.comb += self.buff_wrport.en.eq(1)
+            m.d.top_comb += data_wrport.addr.eq(self.write_idx)
+            m.d.top_comb += data_wrport.data.eq(arg)
+            m.d.comb += data_wrport.en.eq(1)
 
             m.d.sync += self.write_idx.eq(mod_incr(self.write_idx, self.depth))
 
