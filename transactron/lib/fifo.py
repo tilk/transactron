@@ -61,10 +61,10 @@ class BasicFifo(Elaboratable):
         self.write_ready = Signal()
         self.read_ready = Signal()
 
-        self.read_idx = Signal((self.depth - 1).bit_length())
-        self.write_idx = Signal((self.depth - 1).bit_length())
+        self.read_idx = Signal(range(self.depth))
+        self.write_idx = Signal(range(self.depth))
         # current fifo depth
-        self.level = Signal((self.depth).bit_length())
+        self.level = Signal(range (self.depth + 1))
 
         # for interface compatibility with MultiportFifo
         self.read_methods = [self.read]
@@ -316,8 +316,8 @@ class Semaphore(Elaboratable):
         self.acquire_ready = Signal()
         self.release_ready = Signal()
 
-        self.count = Signal(self.max_count.bit_length())
-        self.count_next = Signal(self.max_count.bit_length())
+        self.count = Signal(range(self.max_count + 1))
+        self.count_next = Signal(range(self.max_count + 1))
 
         self.clear.add_conflict(self.acquire, Priority.LEFT)
         self.clear.add_conflict(self.release, Priority.LEFT)
