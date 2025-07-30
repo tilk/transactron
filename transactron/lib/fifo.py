@@ -88,8 +88,7 @@ class BasicFifo(Elaboratable):
             How many stack frames deep the source location is taken from.
             Alternatively, the source location to use instead of the default.
         """
-        self.layout = layout
-        self.width = from_method_layout(self.layout).size
+        self.layout = from_method_layout(layout)
         self.depth = depth
 
         src_loc = get_src_loc(src_loc)
@@ -99,7 +98,7 @@ class BasicFifo(Elaboratable):
         self.clear = Method(src_loc=src_loc)
         self.head = Signal(from_method_layout(layout))
 
-        self.data = memory.Memory(shape=self.width, depth=self.depth, init=[])
+        self.data = memory.Memory(shape=self.layout, depth=self.depth, init=[])
 
         self.read_idx = Signal(range(self.depth))
         self.write_idx = Signal(range(self.depth))

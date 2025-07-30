@@ -3,37 +3,21 @@ import pytest
 from amaranth import *
 from amaranth.lib import data
 
-from transactron.lib import AdapterTrans, BasicFifo
+from transactron.lib import BasicFifo
 from transactron.lib.fifo import WideFifo
 from transactron.utils.amaranth_ext import const_of
 
-from transactron.testing import TestCaseWithSimulator, TestbenchIO, data_layout, TestbenchContext
+from transactron.testing import TestCaseWithSimulator, data_layout, TestbenchContext, SimpleTestCircuit
 from collections import deque
 import random
-
-from transactron.testing.infrastructure import SimpleTestCircuit
-
-
-class BasicFifoTestCircuit(Elaboratable):
-    def __init__(self, depth):
-        self.depth = depth
-
-    def elaborate(self, platform):
-        m = Module()
-
-        m.submodules.fifo = self.fifo = BasicFifo(layout=data_layout(8), depth=self.depth)
-
-        m.submodules.fifo_read = self.fifo_read = TestbenchIO(AdapterTrans(self.fifo.read))
-        m.submodules.fifo_write = self.fifo_write = TestbenchIO(AdapterTrans(self.fifo.write))
-        m.submodules.fifo_clear = self.fifo_clear = TestbenchIO(AdapterTrans(self.fifo.clear))
-
-        return m
 
 
 class TestBasicFifo(TestCaseWithSimulator):
     @pytest.mark.parametrize("depth", [5, 4])
     def test_randomized(self, depth):
-        fifoc = BasicFifoTestCircuit(depth=depth)
+        width = 8
+        layout = data_layout(width)
+        fifoc = SimpleTestCircuit(BasicFifo(layout=layout, depth=depth))
         expq = deque()
 
         cycles = 256
@@ -45,12 +29,12 @@ class TestBasicFifo(TestCaseWithSimulator):
             for _ in range(cycles):
                 await self.random_wait_geom(sim, 0.5)
 
-                v = random.randint(0, (2**fifoc.fifo.width) - 1)
+                v = random.randrange(0, 2**width)
                 expq.appendleft(v)
-                await fifoc.fifo_write.call(sim, data=v)
+                await fifoc.write.call(sim, data=v)
 
                 if random.random() < 0.005:
-                    await fifoc.fifo_clear.call(sim)
+                    await fifoc.clear.call(sim)
                     await sim.delay(1e-9)
                     expq.clear()
 
@@ -60,7 +44,7 @@ class TestBasicFifo(TestCaseWithSimulator):
             while not self.done or expq:
                 await self.random_wait_geom(sim, 0.5)
 
-                v = await fifoc.fifo_read.call_try(sim)
+                v = await fifoc.read.call_try(sim)
 
                 if v is not None:
                     assert v.data == expq.pop()
