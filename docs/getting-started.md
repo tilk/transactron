@@ -1,4 +1,4 @@
-% TODO: Later, when a Transactron guide is written, add links to Transactron concepts (e.g. method, transaction, transaction manager...)
+% TODO: Later, when a Transactron guide is written, add links to Transactron concepts (e.g. method, transaction, transaction manager, method readiness...)
 
 # Getting started
 
@@ -49,6 +49,12 @@ Inside the body, the {py:attr}`~transactron.lib.basicio.OutputBuffer.put` method
 Because of the layout definition `layout`, both the `put` parameter and the field of the structure returned from `get` are named `val`.
 The transaction defined here will run in every cycle, ensuring that the LED always shows the value of the switch.
 
+:::{note}
+Other than method calls, transaction and method bodies can contain arbitrary Python and Amaranth code.
+The Python code of the definition is run once, while Amaranth [assignments]{inv:#lang-assigns} are active only in cycles when the defined transaction or method runs.
+This will be showcased in later part of the tutorial.
+:::
+
 The example component can be synthesized and programmed to your FPGA dev board using the following code.
 The code uses the Digilent Arty A7 board.
 For it to work, Vivado and `xc3sprog` need to be installed.
@@ -63,3 +69,37 @@ Please notice {py:class}`~transactron.core.manager.TransactronModule`, which is 
 It provides the context required by Transactron code, including the transaction manager.
 Without the wrapper, synthesis will fail.
 Typically, there should be only one {py:class}`~transactron.core.manager.TransactronModule` for the entire project.
+
+## Method readiness
+
+For now, our example is not very interesting.
+We will now spice it up a little by adding triggers to our input and output.
+The input of {py:class}`~transactron.lib.basicio.InputSampler` can be sampled only in cycles when the trigger is active; same with setting the output of {py:class}`~transactron.lib.basicio.OutputBuffer`.
+The triggers will be controlled by board buttons.
+
+```{literalinclude} _code/ledcontrol2.py
+```
+
+:::{warning}
+The code assumes that the buttons on the FPGA dev board are active high (pulled down), as is the case on the Arty A7 board.
+If the buttons on your dev board are active low (pulled up), change the `polarity` arguments to `False`.
+:::
+
+Please notice that flipping the switch now does not result in changes of the LED state unless the trigger buttons are both pressed.
+This is because the transaction body now does not run in every cycle.
+Instead it runs only in the cycles when both called methods ({py:attr}`~transactron.lib.basicio.InputSampler.get` and {py:attr}`~transactron.lib.basicio.OutputBuffer.put`) are ready, which is controlled by respective trigger buttons `btn_switch` and `btn_led`.
+
+Also notice that the transaction definition did not need to be changed for this change in behavior.
+This is because, for a transaction to run in a given clock cycle, every method called by the transaction must be ready in that cycle.
+This condition is implicit in transaction definitions.
+It allows to safely change prerequisite conditions for calling methods without modifying the caller code.
+
+Try flipping the switch when both buttons are pressed.
+You will see that the LED state is immediately updated.
+For the state to change only in the instant one of the buttons is pressed, an `edge=True` parameter should be added to the constructor of {py:class}`~transactron.lib.basicio.InputSampler` (or {py:class}`~transactron.lib.basicio.OutputBuffer`).
+This will make the first (or second) button to be edge sensitive instead of level sensitive.
+
+:::{attention}
+If both buttons are made edge sensitive, it will be basically impossible to update the LED state.
+This is because the buttons would need to be pushed in the exactly the same clock cycle, which is very improbable with the default clock on FPGA dev boards being in the MHz range.
+:::
