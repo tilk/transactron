@@ -4,6 +4,7 @@ import amaranth.lib.data as data
 from transactron import TModule, Transaction
 from transactron.lib.basicio import InputSampler, OutputBuffer
 
+
 class LedControl(Elaboratable):
     def elaborate(self, platform):
         m = TModule()
@@ -15,15 +16,11 @@ class LedControl(Elaboratable):
 
         layout = data.StructLayout({"val": 1})
 
-        m.submodules.switch_sampler = switch_sampler = InputSampler(
-            layout, synchronize=True, polarity=True
-        )
+        m.submodules.switch_sampler = switch_sampler = InputSampler(layout, synchronize=True, polarity=True)
         m.d.comb += switch_sampler.data.val.eq(switch.i)
         m.d.comb += switch_sampler.trigger.eq(btn_switch.i)
 
-        m.submodules.led_buffer = led_buffer = OutputBuffer(
-            layout, synchronize=True, polarity=True
-        )
+        m.submodules.led_buffer = led_buffer = OutputBuffer(layout, synchronize=True, polarity=True)
         m.d.comb += led.o.eq(led_buffer.data.val)
         m.d.comb += led_buffer.trigger.eq(btn_led.i)
 
