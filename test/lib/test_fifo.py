@@ -6,18 +6,16 @@ from amaranth.lib import data
 from transactron.lib.fifo import BasicFifo, WideFifo
 from transactron.utils.amaranth_ext import const_of
 
-from transactron.testing import TestCaseWithSimulator, data_layout, TestbenchContext
+from transactron.testing import TestCaseWithSimulator, data_layout, TestbenchContext, SimpleTestCircuit
 from collections import deque
 import random
-
-from transactron.testing.infrastructure import SimpleTestCircuit
 
 
 class TestBasicFifo(TestCaseWithSimulator):
     @pytest.mark.parametrize("depth", [5, 4])
     def test_randomized(self, depth):
-        data_width = 8
-        layout = data_layout(data_width)
+        width = 8
+        layout = data_layout(width)
         fifoc = SimpleTestCircuit(BasicFifo(layout=layout, depth=depth))
         expq = deque()
 
@@ -30,14 +28,10 @@ class TestBasicFifo(TestCaseWithSimulator):
             for _ in range(cycles):
                 await self.random_wait_geom(sim, 0.5)
 
-                v = random.randrange(2**data_width)
-                expq.appendleft(v)
+                v = random.randrange(0, 2**width)
                 await fifoc.write.call(sim, data=v)
-
-                if random.random() < 0.005:
-                    await fifoc.clear.call(sim)
-                    await sim.delay(1e-9)
-                    expq.clear()
+                await sim.delay(2e-9)
+                expq.appendleft(v)
 
             self.done = True
 
@@ -46,13 +40,33 @@ class TestBasicFifo(TestCaseWithSimulator):
                 await self.random_wait_geom(sim, 0.5)
 
                 v = await fifoc.read.call_try(sim)
+                await sim.delay(1e-9)
 
                 if v is not None:
                     assert v.data == expq.pop()
 
+        async def peek(sim: TestbenchContext):
+            while not self.done or expq:
+                v = await fifoc.peek.call_try(sim)
+
+                if v is not None:
+                    assert v.data == expq[-1]
+                else:
+                    assert not expq
+
+        async def clear(sim: TestbenchContext):
+            while not self.done:
+                await self.random_wait_geom(sim, 0.03)
+
+                await fifoc.clear.call(sim)
+                await sim.delay(3e-9)
+                expq.clear()
+
         with self.run_simulation(fifoc) as sim:
             sim.add_testbench(source)
             sim.add_testbench(target)
+            sim.add_testbench(peek)
+            sim.add_testbench(clear)
 
 
 class TestWideFifo(TestCaseWithSimulator):
