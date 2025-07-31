@@ -94,12 +94,23 @@ This is because, for a transaction to run in a given clock cycle, every method c
 This condition is implicit in transaction definitions.
 It allows to safely change prerequisite conditions for calling methods without modifying the caller code.
 
-Try flipping the switch when both buttons are pressed.
-You will see that the LED state is immediately updated.
-For the state to change only in the instant one of the buttons is pressed, an `edge=True` parameter should be added to the constructor of {py:class}`~transactron.lib.basicio.InputSampler` (or {py:class}`~transactron.lib.basicio.OutputBuffer`).
-This will make the first (or second) button to be edge sensitive instead of level sensitive.
+% TODO: discuss edge triggering later, when introducing FIFOs
+%
+%Try flipping the switch when both buttons are pressed.
+%You will see that the LED state is immediately updated.
+%For the state to change only in the instant one of the buttons is pressed, an `edge=True` parameter should be added to the constructor of {py:class}`~transactron.lib.basicio.InputSampler` (or {py:class}`~transactron.lib.basicio.OutputBuffer`).
+%This will make the first (or second) button to be edge sensitive instead of level sensitive.
+%
+%:::{attention}
+%If both buttons are made edge sensitive, it will be basically impossible to update the LED state.
+%This is because the buttons would need to be pushed in the exactly the same clock cycle, which is very improbable with the default clock on FPGA dev boards being in the MHz range.
+%:::
 
-:::{attention}
-If both buttons are made edge sensitive, it will be basically impossible to update the LED state.
-This is because the buttons would need to be pushed in the exactly the same clock cycle, which is very improbable with the default clock on FPGA dev boards being in the MHz range.
-:::
+## Transaction conflicts
+
+In the following example we have two switches controlling the state of a single LED.
+Each of the switches has its own trigger button, but the LED output is always triggered.
+
+```{literalinclude} _code/ledcontrol3.py
+```
+
