@@ -113,7 +113,9 @@ rst_prolog = """
    :language: python
 """
 
-_amaranth_versions = [m[1] for s in importlib.metadata.requires("transactron") if (m := re.fullmatch(r"amaranth[>=]+(.*)", s))]
+_amaranth_versions = [
+    m[1] for s in importlib.metadata.requires("transactron") if (m := re.fullmatch(r"amaranth[>=]+(.*)", s))
+]
 _amaranth_version = f"v{_amaranth_versions[0]}" if _amaranth_versions else "latest"
 
 intersphinx_mapping = {

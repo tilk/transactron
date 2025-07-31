@@ -4,6 +4,7 @@ import amaranth.lib.data as data
 from transactron import TModule, Transaction
 from transactron.lib.basicio import InputSampler, OutputBuffer
 
+
 class LedControl(Elaboratable):
     def elaborate(self, platform):
         m = TModule()
