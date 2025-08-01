@@ -1,5 +1,6 @@
 from .allocators import *  # noqa: F401
 from .fifo import *  # noqa: F401
+from .stack import *  # noqa: F401
 from .connectors import *  # noqa: F401
 from .basicio import *  # noqa: F401
 from .adapters import *  # noqa: F401
