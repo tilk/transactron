@@ -10,13 +10,14 @@ from .keys import TransactionManagerKey
 from transactron.utils import DependencyContext, DependencyManager, silence_mustuse
 
 
-__all__ = ["TransactionModule", "TransactionComponent"]
+__all__ = ["TransactronContextElaboratable", "TransactronContextComponent"]
 
 
-class TransactionModule(Elaboratable):
-    """
-    `TransactionModule` is used as wrapper on `Elaboratable` classes,
-    which adds support for transactions. It creates a
+class TransactronContextElaboratable(Elaboratable):
+    """Top-level Elaboratable for Transactron projects.
+
+    `TransactronContextElaboratable` is used as wrapper on `Elaboratable`
+    classes, which adds support for transactions. It creates a
     `TransactionManager` which will handle transaction scheduling
     and can be used in definition of `Method`\\s and `Transaction`\\s.
     The `TransactionManager` is stored in a `DependencyManager`.
@@ -67,16 +68,16 @@ class TransactionModule(Elaboratable):
         return m
 
 
-class TransactionComponent(TransactionModule, Component):
+class TransactronContextComponent(TransactronContextElaboratable, Component):
     """Top-level component for Transactron projects.
 
-    The `TransactronComponent` is a wrapper on `Component` classes,
+    The `TransactronContextComponent` is a wrapper on `Component` classes,
     which adds Transactron support for the wrapped class. The use
     case is to wrap a top-level module of the project, and pass the
     wrapped module for simulation, HDL generation or synthesis.
     The ports of the wrapped component are forwarded to the wrapper.
 
-    It extends the functionality of `TransactionModule`.
+    It extends the functionality of `TransactronContextComponent`.
     """
 
     def __init__(
@@ -98,7 +99,7 @@ class TransactionComponent(TransactionModule, Component):
             The `TransactionManager` to use inside the transaction component.
             If omitted, a new one is created.
         """
-        TransactionModule.__init__(self, component, dependency_manager, transaction_manager)
+        TransactronContextElaboratable.__init__(self, component, dependency_manager, transaction_manager)
         Component.__init__(self, component.signature)
 
     def elaborate(self, platform):
