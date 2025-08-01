@@ -114,3 +114,17 @@ Each of the switches has its own trigger button, but the LED output is always tr
 ```{literalinclude} _code/ledcontrol3.py
 ```
 
+Pressing the first button changes the state of the LED to the state of the first switch.
+The same thing happens with the second button and the second switch.
+Now try pressing both buttons at once.
+The state of the LED should now show the state of one of the switches, and the other one should be ignored.
+
+What happens is that we now have two different transactions, both trying to call `led_buffer.put`.
+Method calls are exclusive: in each clock cycle, at most one running transaction can call a given method.
+When only one of the buttons is pressed, only one of the `switchN_sampler.get` methods is ready, and the transaction that calls the ready method is run.
+But when both buttons are pressed, both transactions "want" to run, but they can't both run in the same clock cycle because of the `led_buffer.put` call.
+A situation like this is called a transaction conflict.
+Transactron automatically ensures that conflicting transactions are never run in the same clock cycle.
+
+% TODO: priorities? as an aside note?
+
