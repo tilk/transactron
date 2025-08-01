@@ -1,7 +1,7 @@
 import pytest
 import random
 
-from transactron.utils import Scheduler, StableSelectingNetwork
+from transactron.utils import OneHotRoundRobin, StableSelectingNetwork
 from transactron.testing import TestCaseWithSimulator, TestbenchContext
 
 
@@ -12,7 +12,7 @@ class TestScheduler(TestCaseWithSimulator):
         assert len(sched.grant) == cnt
         assert len(sched.valid) == 1
 
-    async def sim_step(self, sim, sched: Scheduler, request: int, expected_grant: int):
+    async def sim_step(self, sim, sched: OneHotRoundRobin, request: int, expected_grant: int):
         sim.set(sched.requests, request)
         _, _, valid, grant = await sim.tick().sample(sched.valid, sched.grant)
 
@@ -23,7 +23,7 @@ class TestScheduler(TestCaseWithSimulator):
             assert valid
 
     def test_single(self):
-        sched = Scheduler(1)
+        sched = OneHotRoundRobin(1)
         self.count_test(sched, 1)
 
         async def process(sim):
@@ -36,7 +36,7 @@ class TestScheduler(TestCaseWithSimulator):
             sim.add_testbench(process)
 
     def test_multi(self):
-        sched = Scheduler(4)
+        sched = OneHotRoundRobin(4)
         self.count_test(sched, 4)
 
         async def process(sim):
