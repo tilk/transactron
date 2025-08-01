@@ -26,7 +26,6 @@ __all__ = [
     "MethodProduct",
     "MethodTryProduct",
     "Collector",
-    "CatTrans",
     "NonexclusiveWrapper",
 ]
 
@@ -361,43 +360,6 @@ class Collector(Elaboratable, Unifier):
         )
 
         self.method.proxy(forwarder.read)
-
-        return m
-
-
-class CatTrans(Elaboratable):
-    """Concatenating transaction.
-
-    Concatenates the results of two methods and passes the result to the
-    third method.
-    """
-
-    def __init__(self, src1: Method, src2: Method, dst: Method):
-        """
-        Parameters
-        ----------
-        src1: Method
-            First input method.
-        src2: Method
-            Second input method.
-        dst: Method
-            The method which receives the concatenation of the results of input
-            methods.
-        """
-        self.src1 = src1
-        self.src2 = src2
-        self.dst = dst
-
-    def elaborate(self, platform):
-        m = TModule()
-
-        with Transaction().body(m):
-            sdata1 = self.src1(m)
-            sdata2 = self.src2(m)
-            ddata = Signal.like(self.dst.data_in)
-            self.dst(m, ddata)
-
-            m.d.comb += ddata.eq(Cat(sdata1, sdata2))
 
         return m
 

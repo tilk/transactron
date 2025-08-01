@@ -168,8 +168,8 @@ class OutputBuffer(BasicIOBase):
         self,
         layout: MethodLayout,
         *,
-        edge: bool = True,
-        polarity: bool = True,
+        edge: bool = False,
+        polarity: bool = False,
         synchronize: bool = False,
         src_loc: int | SrcLoc = 0,
     ):
