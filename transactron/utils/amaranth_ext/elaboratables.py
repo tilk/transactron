@@ -12,7 +12,7 @@ __all__ = [
     "OneHotSwitchDynamic",
     "OneHotSwitch",
     "ModuleConnector",
-    "Scheduler",
+    "OneHotRoundRobin",
     "RoundRobin",
     "MultiPriorityEncoder",
     "RingMultiPriorityEncoder",
@@ -134,7 +134,7 @@ class ModuleConnector(Elaboratable):
         return m
 
 
-class Scheduler(Elaboratable):
+class OneHotRoundRobin(Elaboratable):
     """Scheduler
 
     An implementation of a round-robin scheduler, which is used in the

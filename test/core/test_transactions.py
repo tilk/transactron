@@ -16,7 +16,6 @@ from transactron.testing import TestCaseWithSimulator, TestbenchIO, data_layout
 
 from transactron import *
 from transactron.lib import Adapter, AdapterTrans
-from transactron.utils import Scheduler
 
 from transactron.core import Priority
 from transactron.core.schedulers import trivial_roundrobin_cc_scheduler, eager_deterministic_cc_scheduler
@@ -53,68 +52,13 @@ class TestNames(TestCase):
             assert m.name == "m"
 
 
-class TestScheduler(TestCaseWithSimulator):
-    def count_test(self, sched, cnt):
-        assert sched.count == cnt
-        assert len(sched.requests) == cnt
-        assert len(sched.grant) == cnt
-        assert len(sched.valid) == 1
-
-    async def sim_step(self, sim, sched: Scheduler, ready: int, expected_grant: int):
-        sim.set(sched.requests, ready)
-        _, _, valid, grant = await sim.tick().sample(sched.valid, sched.grant)
-
-        if ready == 0:
-            assert not valid
-        else:
-            assert grant == expected_grant
-            assert valid
-
-    def test_single(self):
-        sched = Scheduler(1)
-        self.count_test(sched, 1)
-
-        async def process(sim):
-            await self.sim_step(sim, sched, 0, 0)
-            await self.sim_step(sim, sched, 1, 1)
-            await self.sim_step(sim, sched, 1, 1)
-            await self.sim_step(sim, sched, 0, 0)
-
-        with self.run_simulation(sched) as sim:
-            sim.add_testbench(process)
-
-    def test_multi(self):
-        sched = Scheduler(4)
-        self.count_test(sched, 4)
-
-        async def process(sim):
-            await self.sim_step(sim, sched, 0b0000, 0b0000)
-            await self.sim_step(sim, sched, 0b1010, 0b0010)
-            await self.sim_step(sim, sched, 0b1010, 0b1000)
-            await self.sim_step(sim, sched, 0b1010, 0b0010)
-            await self.sim_step(sim, sched, 0b1001, 0b1000)
-            await self.sim_step(sim, sched, 0b1001, 0b0001)
-
-            await self.sim_step(sim, sched, 0b1111, 0b0010)
-            await self.sim_step(sim, sched, 0b1111, 0b0100)
-            await self.sim_step(sim, sched, 0b1111, 0b1000)
-            await self.sim_step(sim, sched, 0b1111, 0b0001)
-
-            await self.sim_step(sim, sched, 0b0000, 0b0000)
-            await self.sim_step(sim, sched, 0b0010, 0b0010)
-            await self.sim_step(sim, sched, 0b0010, 0b0010)
-
-        with self.run_simulation(sched) as sim:
-            sim.add_testbench(process)
-
-
 class TransactionConflictTestCircuit(Elaboratable):
     def __init__(self, scheduler):
         self.scheduler = scheduler
 
     def elaborate(self, platform):
         m = TModule()
-        tm = TransactionModule(m, DependencyContext.get(), TransactionManager(self.scheduler))
+        tm = TransactronContextElaboratable(m, DependencyContext.get(), TransactionManager(self.scheduler))
         adapter = Adapter.create(i=data_layout(32), o=data_layout(32))
         m.submodules.out = self.out = TestbenchIO(adapter)
         m.submodules.in1 = self.in1 = TestbenchIO(AdapterTrans(adapter.iface))
@@ -323,7 +267,7 @@ class TestTransactionPriorities(TestCaseWithSimulator):
 class NestedTransactionsTestCircuit(SchedulingTestCircuit):
     def elaborate(self, platform):
         m = TModule()
-        tm = TransactionModule(m)
+        tm = TransactronContextElaboratable(m)
 
         with tm.context():
             with Transaction().body(m, ready=self.r1):
@@ -337,7 +281,7 @@ class NestedTransactionsTestCircuit(SchedulingTestCircuit):
 class NestedMethodsTestCircuit(SchedulingTestCircuit):
     def elaborate(self, platform):
         m = TModule()
-        tm = TransactionModule(m)
+        tm = TransactronContextElaboratable(m)
 
         method1 = Method()
         method2 = Method()
@@ -385,7 +329,7 @@ class TestNested(TestCaseWithSimulator):
 class ScheduleBeforeTestCircuit(SchedulingTestCircuit):
     def elaborate(self, platform):
         m = TModule()
-        tm = TransactionModule(m)
+        tm = TransactronContextElaboratable(m)
 
         method = Method()
 
