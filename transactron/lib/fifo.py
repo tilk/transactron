@@ -2,9 +2,9 @@ from typing import Optional
 from amaranth import *
 import amaranth.lib.memory as memory
 import amaranth.lib.data as data
-from amaranth_types.types import ShapeLike
+from amaranth_types import ShapeLike, ValueLike, SrcLoc
 from transactron import Method, def_method, Priority, TModule
-from transactron.utils._typing import ValueLike, MethodLayout, SrcLoc, MethodStruct
+from transactron.utils._typing import MethodLayout, MethodStruct
 from transactron.utils.amaranth_ext import mod_incr, rotate_vec_right, rotate_vec_left
 from transactron.utils.amaranth_ext.functions import const_of
 from transactron.utils.amaranth_ext.shifter import rotate_left
@@ -15,22 +15,65 @@ __all__ = ["BasicFifo", "WideFifo", "Semaphore"]
 
 
 class BasicFifo(Elaboratable):
-    """Transactional FIFO queue
+    """Transactional FIFO queue"""
 
-    Attributes
-    ----------
     read: Method
-        Reads from the FIFO. Accepts an empty argument, returns a structure.
-        Ready only if the FIFO is not empty.
-    peek: Method
-        Returns the element at the front (but not delete). Ready only if the FIFO
-        is not empty. The method is nonexclusive.
-    write: Method
-        Writes to the FIFO. Accepts a structure, returns empty result.
-        Ready only if the FIFO is not full.
-    clear: Method
-        Clears the FIFO entries. Has priority over `read` and `write` methods.
+    """Reads from the FIFO.
 
+    Returns data at the front of the FIFO, as specified by the data layout
+    `layout`. Ready only if the FIFO is not empty.
+
+    Parameters
+    ----------
+    m: TModule
+        Transactron module.
+
+    Returns
+    -------
+    MethodStruct
+        Data with layout `layout`.
+    """
+
+    peek: Method
+    """Returns the element at the front.
+
+    Ready only if the FIFO is not empty. The method is nonexclusive.
+
+    Parameters
+    ----------
+    m: TModule
+        Transactron module.
+
+    Returns
+    -------
+    MethodStruct
+        Data with layout `layout`.
+    """
+
+    write: Method
+    """Writes to the FIFO.
+
+    Accepts arguments as specified by the data layout `layout`. Ready only if
+    the FIFO is not full.
+
+    Parameters
+    ----------
+    m: TModule
+        Transactron module.
+    **kwargs: ValueLike
+        Arguments as specified by the data layout.
+    """
+
+    clear: Method
+    """Clears the FIFO entries.
+
+    The FIFO is empty in the next cycle after this method runs, even when
+    `write` is called simultaneously with `clear`.
+
+    Parameters
+    ----------
+    m: TModule
+        Transactron module.
     """
 
     def __init__(self, layout: MethodLayout, depth: int, *, src_loc: int | SrcLoc = 0) -> None:
@@ -45,8 +88,7 @@ class BasicFifo(Elaboratable):
             How many stack frames deep the source location is taken from.
             Alternatively, the source location to use instead of the default.
         """
-        self.layout = layout
-        self.width = from_method_layout(self.layout).size
+        self.layout = from_method_layout(layout)
         self.depth = depth
 
         src_loc = get_src_loc(src_loc)
@@ -56,19 +98,12 @@ class BasicFifo(Elaboratable):
         self.clear = Method(src_loc=src_loc)
         self.head = Signal(from_method_layout(layout))
 
-        self.buff = memory.Memory(shape=self.width, depth=self.depth, init=[])
+        self.data = memory.Memory(shape=self.layout, depth=self.depth, init=[])
 
-        self.write_ready = Signal()
-        self.read_ready = Signal()
-
-        self.read_idx = Signal((self.depth - 1).bit_length())
-        self.write_idx = Signal((self.depth - 1).bit_length())
+        self.read_idx = Signal(range(self.depth))
+        self.write_idx = Signal(range(self.depth))
         # current fifo depth
-        self.level = Signal((self.depth).bit_length())
-
-        # for interface compatibility with MultiportFifo
-        self.read_methods = [self.read]
-        self.write_methods = [self.write]
+        self.level = Signal(range(self.depth + 1))
 
     def elaborate(self, platform):
         m = TModule()
@@ -76,12 +111,15 @@ class BasicFifo(Elaboratable):
         next_read_idx = Signal.like(self.read_idx)
         m.d.comb += next_read_idx.eq(mod_incr(self.read_idx, self.depth))
 
-        m.submodules.buff = self.buff
-        self.buff_wrport = self.buff.write_port()
-        self.buff_rdport = self.buff.read_port(domain="sync", transparent_for=[self.buff_wrport])
+        m.submodules.data = self.data
+        data_wrport = self.data.write_port()
+        data_rdport = self.data.read_port(domain="sync", transparent_for=[data_wrport])
 
-        m.d.comb += self.read_ready.eq(self.level != 0)
-        m.d.comb += self.write_ready.eq(self.level != self.depth)
+        read_ready = Signal()
+        write_ready = Signal()
+
+        m.d.comb += read_ready.eq(self.level != 0)
+        m.d.comb += write_ready.eq(self.level != self.depth)
 
         with m.If(self.read.run & ~self.write.run):
             m.d.sync += self.level.eq(self.level - 1)
@@ -90,23 +128,23 @@ class BasicFifo(Elaboratable):
         with m.If(self.clear.run):
             m.d.sync += self.level.eq(0)
 
-        m.d.comb += self.buff_rdport.addr.eq(Mux(self.read.run, next_read_idx, self.read_idx))
-        m.d.comb += self.head.eq(self.buff_rdport.data)
+        m.d.comb += data_rdport.addr.eq(Mux(self.read.run, next_read_idx, self.read_idx))
+        m.d.comb += self.head.eq(data_rdport.data)
 
-        @def_method(m, self.write, ready=self.write_ready)
+        @def_method(m, self.write, ready=write_ready)
         def _(arg: MethodStruct) -> None:
-            m.d.top_comb += self.buff_wrport.addr.eq(self.write_idx)
-            m.d.top_comb += self.buff_wrport.data.eq(arg)
-            m.d.comb += self.buff_wrport.en.eq(1)
+            m.d.top_comb += data_wrport.addr.eq(self.write_idx)
+            m.d.top_comb += data_wrport.data.eq(arg)
+            m.d.comb += data_wrport.en.eq(1)
 
             m.d.sync += self.write_idx.eq(mod_incr(self.write_idx, self.depth))
 
-        @def_method(m, self.read, self.read_ready)
+        @def_method(m, self.read, read_ready)
         def _() -> ValueLike:
             m.d.sync += self.read_idx.eq(next_read_idx)
             return self.head
 
-        @def_method(m, self.peek, self.read_ready, nonexclusive=True)
+        @def_method(m, self.peek, read_ready, nonexclusive=True)
         def _() -> ValueLike:
             return self.head
 
@@ -333,8 +371,8 @@ class Semaphore(Elaboratable):
         self.acquire_ready = Signal()
         self.release_ready = Signal()
 
-        self.count = Signal(self.max_count.bit_length())
-        self.count_next = Signal(self.max_count.bit_length())
+        self.count = Signal(range(self.max_count + 1))
+        self.count_next = Signal(range(self.max_count + 1))
 
         self.clear.add_conflict(self.acquire, Priority.LEFT)
         self.clear.add_conflict(self.release, Priority.LEFT)

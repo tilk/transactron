@@ -101,16 +101,16 @@ class TestUnsatisfiableTriangle(TestCaseWithSimulator):
 
 
 class HelperConnect(Elaboratable):
-    def __init__(self, source: Method, target: Method, request: Signal, data: int):
+    def __init__(self, source: Method, target: Method, ready: Signal, data: int):
         self.source = source
         self.target = target
-        self.request = request
+        self.ready = ready
         self.data = data
 
     def elaborate(self, platform):
         m = TModule()
 
-        with Transaction().body(m, request=self.request):
+        with Transaction().body(m, ready=self.ready):
             self.target(m, self.data ^ self.source(m).data)
 
         return m
@@ -129,8 +129,8 @@ class TransitivityTestCircuit(Elaboratable):
 
         m.submodules.c1 = c1 = Connect([("data", 2)])
         m.submodules.c2 = c2 = Connect([("data", 2)])
-        self.source1.proxy(m, c1.write)
-        self.source2.proxy(m, c1.write)
+        self.source1.proxy(c1.write)
+        self.source2.proxy(c1.write)
         m.submodules.ct = ConnectTrans(c2.read, self.target)
         m.submodules.hc1 = HelperConnect(c1.read, c2.write, self.req1, 1)
         m.submodules.hc2 = HelperConnect(c1.read, c2.write, self.req2, 2)

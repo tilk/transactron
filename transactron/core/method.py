@@ -4,6 +4,7 @@ import enum
 from transactron.utils import *
 from amaranth import *
 from amaranth import tracer
+from amaranth_types import ValueLike
 from typing import TYPE_CHECKING, Annotated, Optional, Iterator, TypeAlias, TypeVar, Unpack, overload
 from .transaction_base import *
 from contextlib import contextmanager
@@ -38,9 +39,9 @@ class Method(TransactionBase["Transaction | Method"]):
 
     A `Method` serves to interface a module with external `Transaction`\\s
     or `Method`\\s. It can be called by at most once in a given clock cycle.
-    When a given `Method` is required by multiple `Transaction`\\s
+    When a given `Method` is called by multiple `Transaction`\\s
     (either directly, or indirectly via another `Method`) simultenaously,
-    at most one of them is granted by the `TransactionManager`, and the rest
+    at most one of them is run by the `TransactionManager`, and the rest
     of them must wait. (Non-exclusive methods are an exception to this
     behavior.) Calling a `Method` always takes a single clock cycle.
 
@@ -137,18 +138,14 @@ class Method(TransactionBase["Transaction | Method"]):
             return self._body_ptr
         raise RuntimeError(f"Method '{self.name}' not defined")
 
-    def _set_impl(self, m: TModule, value: "Body | Method"):
+    def _set_impl(self, value: "Body | Method"):
         if self._body_ptr is not None:
             raise RuntimeError(f"Method '{self.name}' already defined")
         if value.data_in.shape() != self.layout_in or value.data_out.shape() != self.layout_out:
             raise ValueError(f"Method {value.name} has different interface than {self.name}")
         self._body_ptr = value
-        m.d.comb += self.ready.eq(value.ready)
-        m.d.comb += self.run.eq(value.run)
-        m.d.comb += self.data_in.eq(value.data_in)
-        m.d.comb += self.data_out.eq(value.data_out)
 
-    def proxy(self, m: TModule, method: "Method"):
+    def proxy(self, method: "Method"):
         """Define as a proxy for another method.
 
         The calls to this method will be forwarded to `method`.
@@ -161,7 +158,10 @@ class Method(TransactionBase["Transaction | Method"]):
         method : Method
             Method for which this method is a proxy for.
         """
-        self._set_impl(m, method)
+        self._set_impl(method)
+
+        manager = DependencyContext.get().get_dependency(TransactionManagerKey())
+        manager._add_proxy_method(self)
 
     @contextmanager
     def body(
@@ -231,7 +231,7 @@ class Method(TransactionBase["Transaction | Method"]):
         body = Body(
             name=self.name, owner=self.owner, i=self.layout_in, o=self.layout_out, src_loc=self.src_loc, **kwargs
         )
-        self._set_impl(m, body)
+        self._set_impl(body)
 
         m.d.av_comb += body.ready.eq(ready)
         m.d.top_comb += body.data_out.eq(out)

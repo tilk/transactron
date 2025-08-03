@@ -181,7 +181,7 @@ class AdapterCircuit(Elaboratable):
 class TestInvalidMethods(TestCase):
     def assert_re(self, msg, m):
         with pytest.raises(RuntimeError, match=msg):
-            Fragment.get(TransactionModule(m), platform=None)
+            Fragment.get(TransactronContextElaboratable(m), platform=None)
 
     def test_twice(self):
         class Twice(Elaboratable):
@@ -225,7 +225,7 @@ class TestInvalidMethods(TestCase):
 
                 return m
 
-        Fragment.get(TransactionModule(Twice()), platform=None)
+        Fragment.get(TransactronContextElaboratable(Twice()), platform=None)
 
     def test_diamond(self):
         class Diamond(Elaboratable):
@@ -458,7 +458,7 @@ class ConditionalTransactionCircuit1(Elaboratable):
         self.ready = Signal()
         m.submodules.tb = self.tb = TestbenchIO(Adapter.create())
 
-        with Transaction().body(m, request=self.ready):
+        with Transaction().body(m, ready=self.ready):
             self.tb.adapter.iface(m)
 
         return m
@@ -725,11 +725,11 @@ class DataDependentConditionalCircuit(Elaboratable):
         def _(data):
             m.d.comb += self.out_m.eq(1)
 
-        with Transaction().body(m, request=self.req_t1):
+        with Transaction().body(m, ready=self.req_t1):
             m.d.comb += self.out_t1.eq(1)
             self.method(m, data=self.in_t1)
 
-        with Transaction().body(m, request=self.req_t2):
+        with Transaction().body(m, ready=self.req_t2):
             m.d.comb += self.out_t2.eq(1)
             self.method(m, data=self.in_t2)
 

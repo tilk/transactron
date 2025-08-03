@@ -97,7 +97,7 @@ class ArgumentsToResultsZipper(Elaboratable):
             results = forwarder.read(m)
             return {"args": args, "results": results}
 
-        self.peek_arg.proxy(m, fifo.peek)
+        self.peek_arg.proxy(fifo.peek)
 
         return m
 
@@ -159,7 +159,7 @@ class Serializer(Elaboratable):
 
         self.depth = depth
 
-        self.id_layout = [("id", exact_log2(self.port_count))]
+        self.id_layout = [("id", range(self.port_count))]
 
         self.clear = Method()
         self.serialize_in = Methods(port_count, i=serialized_req_method.layout_in, src_loc=self.src_loc)
@@ -183,6 +183,6 @@ class Serializer(Elaboratable):
                 pending_requests.read(m)
                 return self.serialized_resp_method(m)
 
-        self.clear.proxy(m, pending_requests.clear)
+        self.clear.proxy(pending_requests.clear)
 
         return m
