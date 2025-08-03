@@ -11,6 +11,7 @@ from typing import TypeVar, Generic, TypeGuard, Any, cast, TypeAlias, Optional
 from amaranth import *
 from amaranth.sim import *
 from amaranth.sim._async import SimulatorContext
+from amaranth_types import HasElaborate
 from transactron.core.method import MethodDir
 from transactron.lib.adapters import Adapter
 
@@ -23,8 +24,8 @@ from .method_mock import MethodMock
 from transactron import Method, Methods
 from transactron.lib import AdapterTrans
 from transactron.core.keys import TransactionManagerKey
-from transactron.core import TransactionModule
-from transactron.utils import ModuleConnector, HasElaborate, auto_debug_signals, HasDebugSignals
+from transactron.core.context import TransactronContextElaboratable
+from transactron.utils import ModuleConnector, auto_debug_signals, HasDebugSignals
 
 
 __all__ = ["SimpleTestCircuit", "PysimSimulator", "TestCaseWithSimulator"]
@@ -123,7 +124,7 @@ class SimpleTestCircuit(Elaboratable, Generic[_T_HasElaborate]):
 class _TestModule(Elaboratable):
     def __init__(self, tested_module: HasElaborate, add_transaction_module: bool):
         self.tested_module = (
-            TransactionModule(tested_module, dependency_manager=DependencyContext.get())
+            TransactronContextElaboratable(tested_module, dependency_manager=DependencyContext.get())
             if add_transaction_module
             else tested_module
         )
