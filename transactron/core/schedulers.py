@@ -69,9 +69,9 @@ def trivial_roundrobin_cc_scheduler(
         Linear ordering of transactions which is consistent with priority constraints.
     """
     m = Module()
-    sched = Scheduler(len(cc))
-    m.submodules.scheduler = sched
+    rr = OneHotRoundRobin(len(cc))
+    m.submodules.rr = rr
     for k, transaction in enumerate(cc):
-        m.d.comb += sched.requests[k].eq(transaction.ready & transaction.runnable)
-        m.d.comb += transaction.run.eq(sched.grant[k] & sched.valid)
+        m.d.comb += rr.requests[k].eq(transaction.ready & transaction.runnable)
+        m.d.comb += transaction.run.eq(rr.grant[k] & rr.valid)
     return m

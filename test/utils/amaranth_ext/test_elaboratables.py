@@ -1,8 +1,63 @@
 import pytest
 import random
 
-from transactron.utils import StableSelectingNetwork
+from transactron.utils import OneHotRoundRobin, StableSelectingNetwork
 from transactron.testing import TestCaseWithSimulator, TestbenchContext
+
+
+class TestScheduler(TestCaseWithSimulator):
+    def count_test(self, sched, cnt):
+        assert sched.count == cnt
+        assert len(sched.requests) == cnt
+        assert len(sched.grant) == cnt
+        assert len(sched.valid) == 1
+
+    async def sim_step(self, sim, sched: OneHotRoundRobin, request: int, expected_grant: int):
+        sim.set(sched.requests, request)
+        _, _, valid, grant = await sim.tick().sample(sched.valid, sched.grant)
+
+        if request == 0:
+            assert not valid
+        else:
+            assert grant == expected_grant
+            assert valid
+
+    def test_single(self):
+        sched = OneHotRoundRobin(1)
+        self.count_test(sched, 1)
+
+        async def process(sim):
+            await self.sim_step(sim, sched, 0, 0)
+            await self.sim_step(sim, sched, 1, 1)
+            await self.sim_step(sim, sched, 1, 1)
+            await self.sim_step(sim, sched, 0, 0)
+
+        with self.run_simulation(sched) as sim:
+            sim.add_testbench(process)
+
+    def test_multi(self):
+        sched = OneHotRoundRobin(4)
+        self.count_test(sched, 4)
+
+        async def process(sim):
+            await self.sim_step(sim, sched, 0b0000, 0b0000)
+            await self.sim_step(sim, sched, 0b1010, 0b0010)
+            await self.sim_step(sim, sched, 0b1010, 0b1000)
+            await self.sim_step(sim, sched, 0b1010, 0b0010)
+            await self.sim_step(sim, sched, 0b1001, 0b1000)
+            await self.sim_step(sim, sched, 0b1001, 0b0001)
+
+            await self.sim_step(sim, sched, 0b1111, 0b0010)
+            await self.sim_step(sim, sched, 0b1111, 0b0100)
+            await self.sim_step(sim, sched, 0b1111, 0b1000)
+            await self.sim_step(sim, sched, 0b1111, 0b0001)
+
+            await self.sim_step(sim, sched, 0b0000, 0b0000)
+            await self.sim_step(sim, sched, 0b0010, 0b0010)
+            await self.sim_step(sim, sched, 0b0010, 0b0010)
+
+        with self.run_simulation(sched) as sim:
+            sim.add_testbench(process)
 
 
 class TestStableSelectingNetwork(TestCaseWithSimulator):
