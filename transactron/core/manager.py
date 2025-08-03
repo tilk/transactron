@@ -6,6 +6,8 @@ from amaranth import *
 from itertools import chain, filterfalse, product
 import networkx
 
+from amaranth_types import ValueLike
+
 from transactron.utils import *
 from transactron.utils.transactron_helpers import _graph_ccs
 from transactron.graph import OwnershipGraph, Direction
