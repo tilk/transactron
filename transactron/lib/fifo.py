@@ -4,7 +4,7 @@ import amaranth.lib.memory as memory
 import amaranth.lib.data as data
 from amaranth_types import ShapeLike, ValueLike, SrcLoc
 from transactron import Method, def_method, Priority, TModule
-from transactron.utils._typing import MethodLayout, MethodStruct
+from transactron.utils.typing import MethodLayout, MethodStruct
 from transactron.utils.amaranth_ext import mod_incr, rotate_vec_right, rotate_vec_left
 from transactron.utils.amaranth_ext.functions import const_of
 from transactron.utils.amaranth_ext.shifter import rotate_left

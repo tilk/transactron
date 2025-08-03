@@ -5,7 +5,7 @@ from amaranth.lib import data
 from amaranth.lib.enum import Enum
 from amaranth.hdl._ast import ArrayProxy, SwitchValue, Slice
 
-from transactron.utils._typing import MethodLayout
+from transactron.utils.typing import MethodLayout
 from transactron.utils import AssignType, assign
 from transactron.utils.assign import AssignArg, AssignFields
 

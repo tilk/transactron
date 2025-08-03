@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, ClassVar, NewType, NotRequired, Optional, Call
 from transactron.utils.amaranth_ext.elaboratables import OneHotSwitchDynamic
 from transactron.utils.assign import AssignArg
 from transactron.utils.transactron_helpers import from_method_layout, method_def_helper
-from transactron.utils._typing import MethodStruct
+from transactron.utils.typing import MethodStruct
 
 if TYPE_CHECKING:
     from .method import Method

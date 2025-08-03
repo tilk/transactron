@@ -7,7 +7,7 @@ from collections.abc import Callable, Iterable, Mapping
 import operator
 
 from amaranth_types.types import ValueLike, ShapeLike
-from transactron.utils._typing import ValueBundle
+from transactron.utils.typing import ValueBundle
 
 __all__ = [
     "mod_incr",
