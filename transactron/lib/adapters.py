@@ -4,9 +4,8 @@ from amaranth import *
 from amaranth.lib.wiring import Component, In, Out
 from amaranth.lib.data import StructLayout, View
 
-from ..utils import SrcLoc, get_src_loc, MethodStruct
+from ..utils import SrcLoc, get_src_loc, MethodStruct, MethodLayout, ValueBundle
 from ..core import *
-from ..utils._typing import ValueBundle, MethodLayout
 
 __all__ = [
     "AdapterBase",

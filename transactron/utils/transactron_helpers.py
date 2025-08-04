@@ -2,7 +2,7 @@ import sys
 from contextlib import contextmanager
 from typing import Optional, Any, Concatenate, TypeGuard, TypeVar
 from collections.abc import Callable, Mapping, Sequence
-from ._typing import ROGraph, GraphCC, MethodLayout, MethodStruct, LayoutList, LayoutListField
+from .typing import ROGraph, GraphCC, MethodLayout, MethodStruct, LayoutList, LayoutListField
 from amaranth_types import SrcLoc, ShapeLike
 from inspect import Parameter, signature
 from itertools import count

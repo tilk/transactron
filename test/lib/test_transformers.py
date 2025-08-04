@@ -7,7 +7,7 @@ from transactron import *
 from transactron.lib.adapters import Adapter, AdapterTrans
 from transactron.lib.transformers import *
 from transactron.testing.testbenchio import CallTrigger
-from transactron.utils._typing import MethodStruct, RecordDict
+from transactron.utils.typing import MethodStruct, RecordDict
 from transactron.utils import ModuleConnector
 from transactron.testing import (
     SimpleTestCircuit,

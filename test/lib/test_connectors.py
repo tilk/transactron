@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from amaranth import *
 from transactron import *
-from transactron.utils._typing import MethodLayout
+from transactron.utils.typing import MethodLayout
 from transactron.lib.connectors import *
 from transactron.testing.testbenchio import CallTrigger
 from transactron.testing import (

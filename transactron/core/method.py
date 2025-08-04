@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Annotated, Optional, Iterator, TypeAlias, Type
 from .transaction_base import *
 from contextlib import contextmanager
 from transactron.utils.assign import AssignArg
-from transactron.utils._typing import type_self_add_1pos_kwargs_as
+from transactron.utils.typing import type_self_add_1pos_kwargs_as
 
 from .body import Body, BodyParams, MBody
 from .keys import TransactionManagerKey
