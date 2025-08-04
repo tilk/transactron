@@ -26,9 +26,6 @@ extensions = [
 # if they have a caption.
 numfig = True
 
-# Warn about unresolved references.
-nitpicky = True
-
 # The suffix of source filenames.
 source_suffix = {
     ".md": "markdown",
