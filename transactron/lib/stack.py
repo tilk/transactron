@@ -2,7 +2,7 @@ from amaranth import *
 import amaranth.lib.memory as memory
 from amaranth_types import ValueLike, SrcLoc
 from transactron import Method, def_method, TModule
-from transactron.utils._typing import MethodLayout, MethodStruct
+from transactron.utils.typing import MethodLayout, MethodStruct
 from transactron.utils.transactron_helpers import from_method_layout, get_src_loc
 
 

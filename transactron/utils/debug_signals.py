@@ -1,6 +1,6 @@
 from typing import Optional
 from amaranth import *
-from ._typing import ValueBundle, HasDebugSignals
+from .typing import ValueBundle, HasDebugSignals
 from collections.abc import Collection, Mapping
 
 

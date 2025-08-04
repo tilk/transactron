@@ -7,7 +7,7 @@ from transactron.core.body import AdapterBodyParams
 from transactron.lib.adapters import Adapter, AdapterBase
 from transactron.utils.transactron_helpers import async_mock_def_helper
 from .testbenchio import TestbenchIO
-from transactron.utils._typing import RecordIntDict
+from transactron.utils.typing import RecordIntDict
 
 
 __all__ = ["MethodMock", "def_method_mock"]
