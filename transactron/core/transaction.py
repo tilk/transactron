@@ -4,7 +4,7 @@ from amaranth import tracer
 from amaranth_types import SrcLoc, ValueLike
 from typing import TYPE_CHECKING, Optional, Iterator
 
-from transactron.utils._typing import ValueBundle
+from transactron.utils.typing import ValueBundle
 from transactron.utils.dependencies import DependencyContext
 from transactron.utils.transactron_helpers import get_caller_class_name, get_src_loc
 from .keys import *
