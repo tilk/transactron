@@ -20,15 +20,11 @@ class LedControl(Elaboratable):
 
         layout = data.StructLayout({"val": 1})
 
-        m.submodules.switch_sampler = switch_sampler = InputSampler(
-            layout, synchronize=True, polarity=True, edge=True
-        )
+        m.submodules.switch_sampler = switch_sampler = InputSampler(layout, synchronize=True, polarity=True, edge=True)
         m.d.comb += switch_sampler.data.val.eq(switch.i)
         m.d.comb += switch_sampler.trigger.eq(btn_switch.i)
 
-        m.submodules.led_buffer = led_buffer = OutputBuffer(
-            layout, synchronize=True, polarity=True, edge=True
-        )
+        m.submodules.led_buffer = led_buffer = OutputBuffer(layout, synchronize=True, polarity=True, edge=True)
         m.d.comb += led.o.eq(led_buffer.data.val)
         m.d.comb += led_buffer.trigger.eq(btn_led.i)
 
