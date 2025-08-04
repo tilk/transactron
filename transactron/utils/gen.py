@@ -5,6 +5,7 @@ from typing import Optional, TypeAlias
 from amaranth import *
 from amaranth.back import verilog
 from amaranth.hdl import Fragment
+from amaranth_types import AbstractInterface
 
 from transactron.core import TransactionManager
 from transactron.core.keys import TransactionManagerKey
@@ -13,7 +14,6 @@ from transactron.lib.metrics import HardwareMetricsManager
 from transactron.lib import logging
 from transactron.utils.dependencies import DependencyContext
 from transactron.utils.idgen import IdGenerator
-from transactron.utils._typing import AbstractInterface
 from transactron.profiler import ProfileData
 
 from typing import TYPE_CHECKING
@@ -56,17 +56,17 @@ class TransactionSignalsLocation:
 
     Attributes
     ----------
-    request: list[str]
-        The location of the ``request`` signal.
+    ready: list[str]
+        The location of the ``ready`` signal.
     runnable: list[str]
         The location of the ``runnable`` signal.
-    grant: list[str]
-        The location of the ``grant`` signal.
+    run: list[str]
+        The location of the ``run`` signal.
     """
 
-    request: list[str]
+    ready: list[str]
     runnable: list[str]
-    grant: list[str]
+    run: list[str]
 
 
 @dataclass_json
@@ -193,12 +193,10 @@ def collect_transaction_method_signals(
     get_id = IdGenerator()
 
     for transaction in method_map.transactions:
-        request_loc = get_signal_location(transaction.ready, name_map)
+        ready_loc = get_signal_location(transaction.ready, name_map)
         runnable_loc = get_signal_location(transaction.runnable, name_map)
-        grant_loc = get_signal_location(transaction.run, name_map)
-        transaction_signals_location[get_id(transaction)] = TransactionSignalsLocation(
-            request_loc, runnable_loc, grant_loc
-        )
+        run_loc = get_signal_location(transaction.run, name_map)
+        transaction_signals_location[get_id(transaction)] = TransactionSignalsLocation(ready_loc, runnable_loc, run_loc)
 
     for method in method_map.methods:
         run_loc = get_signal_location(method.run, name_map)

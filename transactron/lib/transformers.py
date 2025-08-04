@@ -1,4 +1,5 @@
 from amaranth import *
+from amaranth_types import ValueLike, ModuleLike, HasElaborate
 
 from transactron.utils.transactron_helpers import get_src_loc
 from ..core import *
@@ -6,16 +7,13 @@ from ..utils import SrcLoc
 from typing import Optional, Protocol
 from collections.abc import Callable
 from transactron.utils import (
-    ValueLike,
     assign,
     AssignType,
-    ModuleLike,
     MethodStruct,
-    HasElaborate,
     MethodLayout,
     RecordDict,
 )
-from .connectors import Forwarder, ManyToOneConnectTrans, ConnectTrans
+from .connectors import Forwarder, ManyToOneConnectTrans
 from .simultaneous import condition
 
 __all__ = [
@@ -26,8 +24,6 @@ __all__ = [
     "MethodProduct",
     "MethodTryProduct",
     "Collector",
-    "CatTrans",
-    "ConnectAndMapTrans",
     "NonexclusiveWrapper",
 ]
 
@@ -362,96 +358,6 @@ class Collector(Elaboratable, Unifier):
         )
 
         self.method.proxy(forwarder.read)
-
-        return m
-
-
-class CatTrans(Elaboratable):
-    """Concatenating transaction.
-
-    Concatenates the results of two methods and passes the result to the
-    third method.
-    """
-
-    def __init__(self, src1: Method, src2: Method, dst: Method):
-        """
-        Parameters
-        ----------
-        src1: Method
-            First input method.
-        src2: Method
-            Second input method.
-        dst: Method
-            The method which receives the concatenation of the results of input
-            methods.
-        """
-        self.src1 = src1
-        self.src2 = src2
-        self.dst = dst
-
-    def elaborate(self, platform):
-        m = TModule()
-
-        with Transaction().body(m):
-            sdata1 = self.src1(m)
-            sdata2 = self.src2(m)
-            ddata = Signal.like(self.dst.data_in)
-            self.dst(m, ddata)
-
-            m.d.comb += ddata.eq(Cat(sdata1, sdata2))
-
-        return m
-
-
-class ConnectAndMapTrans(Elaboratable):
-    """Connecting transaction with mapping functions.
-
-    Behaves like `ConnectTrans`, but modifies the transferred data using
-    functions or `Method`s. Equivalent to a combination of `ConnectTrans`
-    and `MethodMap`. The mapping functions take two parameters, a `Module`
-    and the structure being transformed.
-    """
-
-    def __init__(
-        self,
-        method1: Method,
-        method2: Method,
-        *,
-        i_fun: Optional[Callable[[TModule, MethodStruct], RecordDict]] = None,
-        o_fun: Optional[Callable[[TModule, MethodStruct], RecordDict]] = None,
-        src_loc: int | SrcLoc = 0,
-    ):
-        """
-        Parameters
-        ----------
-        method1: Method
-            First method.
-        method2: Method
-            Second method, and the method being transformed.
-        i_fun: function or Method, optional
-            Input transformation (`method1` to `method2`).
-        o_fun: function or Method, optional
-            Output transformation (`method2` to `method1`).
-        src_loc: int | SrcLoc
-            How many stack frames deep the source location is taken from.
-            Alternatively, the source location to use instead of the default.
-        """
-        self.method1 = method1
-        self.method2 = method2
-        self.i_fun = i_fun or (lambda _, x: x)
-        self.o_fun = o_fun or (lambda _, x: x)
-        self.src_loc = get_src_loc(src_loc)
-
-    def elaborate(self, platform):
-        m = TModule()
-
-        m.submodules.transformer = transformer = MethodMap(
-            self.method2,
-            i_transform=(self.method1.layout_out, self.i_fun),
-            o_transform=(self.method1.layout_in, self.o_fun),
-            src_loc=self.src_loc,
-        )
-        m.submodules.connect = ConnectTrans(self.method1, transformer.method)
 
         return m
 
