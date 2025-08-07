@@ -217,3 +217,37 @@ Try playing with the button and the switch some more.
 
 Try swapping the {py:class}`~transactron.lib.fifo.BasicFifo` for a {py:class}`~transactron.lib.stack.Stack`.
 For that, only the import and class name need to be changed.
+
+## RPN calculator
+
+We will now implement a larger example: a reverse Polish notation (RPN) calculator.
+In this notation, operations are entered postfix, and parentheses are not needed: the expression (2 + 3) * 4 becomes 2 3 + 4 * in RPN.
+The algorithm for computing the value of RPN expressions reads symbols (numbers and operators) from left to right and uses a stack to store intermediate results.
+When a number is read, it is pushed to the stack.
+Reading an operator causes two numbers to be popped from the stack, and the result to be pushed back.
+
+Hardware which implements a RPN calculator needs to be able to perform these two kinds of operations.
+The stack data structure in Transactron standard library, {py:class}`~transactron.lib.stack.Stack`, can perform at most one push and one pop per clock cycle.
+So, if used directly, performing a RPN operation would require more than one clock cycle.
+Instead, we will create a specialized stack structure, which will store the top value of the stack in a register so that a single clock cycle will suffice.
+
+```{literalinclude} _code/rpnstack.py
+```
+
+In the constructor we declare methods provided by our component.
+The `peek` and `peek2` methods will return the top of the stack and the element immediately below it, both methods will not take any parameters.
+The `push` method will insert a new element to the stack, while `pop_set_top` will remove one element and change the value of the one below it.
+
+The methods are defined inside `elaborate` using the {py:class}`~transactron.lib.stack.Stack` component and two additional registers, `top` and `nonempty`.
+Methods are defined using {py:class}`~transactron.core.sugar.def_method` decorator syntax.
+The method definition is written using Python `def` function syntax.
+It works much like the `body` context manager used for defining transactions -- the Python code inside the definition is evaluated exactly once.
+Method inputs are passed as parameters, while the result is provided using `return` as a `dict`.
+
+The first method, `peek`, returns the value at the top of the stack, which is stored in the register `top`.
+It is ready only when the stack is not empty.
+The `nonexclusive=True` parameter to `def_method` allows this method to be called by multiple transactions in a single clock cycle.
+This is justified by the fact that `peek` does not alter the state of the component in any way.
+
+
+
