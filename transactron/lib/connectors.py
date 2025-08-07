@@ -355,7 +355,7 @@ class CrossbarConnectTrans(Elaboratable):
         """
         Parameters
         ----------
-        count2: int, optional
+        count1: int, optional
             Size of `methods1`. Defaults to 1 if not provided.
         count2: int, optional
             Size of `methods2`. Defaults to 1 if not provided.
