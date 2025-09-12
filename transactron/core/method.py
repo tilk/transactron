@@ -158,9 +158,6 @@ class Method(TransactionBase["Transaction | Method"]):
         """
         self._set_impl(method)
 
-        manager = DependencyContext.get().get_dependency(TransactionManagerKey())
-        manager._add_proxy_method(self)
-
     @contextmanager
     def body(
         self, m: TModule, *, ready: ValueLike = C(1), out: ValueLike = C(0, 0), **kwargs: Unpack[BodyParams]

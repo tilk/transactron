@@ -34,9 +34,11 @@ class MethodMap:
         self.argument_by_call = dict[tuple[TBody, MBody], MethodStruct]()
         self.ancestors_by_call = dict[tuple[TBody, MBody], tuple[MBody, ...]]()
         self.method_parents = defaultdict[MBody, list[Body]](list)
+        self.method_objects = set[Method]()
 
         def rec(transaction: TBody, source: Body, ancestors: tuple[MBody, ...]):
             for method_obj, (arg_rec, _) in source.method_uses.items():
+                self.method_objects.add(method_obj)
                 method = MBody(method_obj._body)
                 if method in self.methods_by_transaction[transaction]:
                     raise RuntimeError(f"Method '{method_obj.name}' can't be called twice from the same transaction")
@@ -85,7 +87,6 @@ class TransactionManager(Elaboratable):
     def __init__(self, cc_scheduler: TransactionScheduler = eager_deterministic_cc_scheduler):
         self.transactions: list[Transaction] = []
         self.methods: list[Method] = []
-        self.proxy_methods: list[Method] = []
         self.cc_scheduler = cc_scheduler
 
     def _add_transaction(self, transaction: Transaction):
@@ -93,9 +94,6 @@ class TransactionManager(Elaboratable):
 
     def _add_method(self, method: Method):
         self.methods.append(method)
-
-    def _add_proxy_method(self, method: Method):
-        self.proxy_methods.append(method)
 
     @staticmethod
     def _conflict_graph(method_map: MethodMap) -> tuple[TransactionGraph, PriorityOrder]:
@@ -311,7 +309,6 @@ class TransactionManager(Elaboratable):
         for transaction in joined_transactions:
             method = Method(name=transaction.name, src_loc=transaction.src_loc)
             method._set_impl(transaction)
-            self.proxy_methods.append(method)
             methods[transaction] = method
 
         # step 5: construct merged transactions
@@ -352,7 +349,7 @@ class TransactionManager(Elaboratable):
         for elem in method_map.methods_and_transactions:
             elem._set_method_uses(m)
 
-        for method in chain(self.methods, self.proxy_methods):
+        for method in set(self.methods) | method_map.method_objects:
             m.d.comb += method.ready.eq(method._body.ready)
             m.d.comb += method.run.eq(method._body.run)
             m.d.comb += method.data_in.eq(method._body.data_in)
