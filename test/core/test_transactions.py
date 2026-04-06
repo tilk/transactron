@@ -329,7 +329,32 @@ class NestedMethodsTestCircuit(SchedulingTestCircuit):
         return m
 
 
-@pytest.mark.parametrize("circuit", [NestedTransactionsTestCircuit, NestedMethodsTestCircuit])
+class NestedMethodsInTransactionsTestCircuit(SchedulingTestCircuit):
+    def elaborate(self, platform):
+        m = TModule()
+
+        method1 = Method()
+        method2 = Method()
+
+        @def_method(m, method1)
+        def _():
+            m.d.comb += self.t1.eq(1)
+
+        @def_method(m, method2)
+        def _():
+            m.d.comb += self.t2.eq(1)
+
+        with Transaction().body(m, ready=self.r1):
+            method1(m)
+            with Transaction().body(m, ready=self.r2):
+                method2(m)
+
+        return m
+
+
+@pytest.mark.parametrize(
+    "circuit", [NestedTransactionsTestCircuit, NestedMethodsTestCircuit, NestedMethodsInTransactionsTestCircuit]
+)
 class TestNested(TestCaseWithSimulator):
     def setup_method(self):
         random.seed(42)
