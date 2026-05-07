@@ -207,6 +207,18 @@ class HardwareLogger:
         """
         trigger_signal = Signal()
         m.d.comb += trigger_signal.eq(Value.cast(trigger).any())
+
+        # This is not strictly necessary, but improves pysim simulation time.
+        # TODO: When Amaranth's pysim improves (amaranth-lang/amaranth#1630), this can be removed.
+        def convert(arg: ValueLike):
+            if isinstance(arg, ValueCastable):
+                return arg
+            sig = Signal.like(arg)  # type: ignore
+            m.d.comb += sig.eq(arg)
+            return sig
+
+        args = tuple(convert(arg) for arg in args)
+
         self.top_log(level, trigger_signal, format, *args, src_loc=get_src_loc(src_loc))
 
     def debug(self, m: ModuleLike, trigger: ValueLike, format: str, *args: ValueLike, src_loc: int | SrcLoc = 0):
