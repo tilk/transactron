@@ -239,9 +239,10 @@ def switch_value(
     src_loc = get_src_loc(src_loc)
     cases = list(cases)
     case_shapes = [shape_of(val) for _, val in cases]
-    if all(isinstance(shape, ShapeCastable) for shape in case_shapes):
-        shape = cast(ShapeCastable, case_shapes[0])
-        if any(case_shape != shape for case_shape in case_shapes):
+    shapecastable_shapes = [shape for shape in case_shapes if isinstance(shape, ShapeCastable)]
+    if shapecastable_shapes:
+        shape = cast(ShapeCastable, shapecastable_shapes[0])
+        if any(case_shape != shape for case_shape in shapecastable_shapes):
             raise ValueError("Different ShapeCastables for different shapes")
         return shape(SwitchValue(test, [(key, Value.cast(val)) for key, val in cases], src_loc=src_loc))
     else:
@@ -250,6 +251,14 @@ def switch_value(
 
 @overload
 def mux(sel: ValueLike, val1: FlatValueLike, val0: FlatValueLike) -> Value: ...
+
+
+@overload
+def mux[T: ValueCastable](sel: ValueLike, val1: T, val0: FlatValueLike) -> T: ...
+
+
+@overload
+def mux[T: ValueCastable](sel: ValueLike, val1: FlatValueLike, val0: T) -> T: ...
 
 
 @overload
