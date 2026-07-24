@@ -2,7 +2,8 @@ import functools
 import json
 import random
 import pytest
-from typing import Type, Optional
+import enum as py_enum
+from typing import Optional
 from collections import deque
 
 from amaranth import *
@@ -158,7 +159,7 @@ class PlainEnum(Enum, shape=2):
 
 
 class TaggedCounterCircuit(Elaboratable):
-    def __init__(self, tags: range | Type[Enum] | list[int], ways: int):
+    def __init__(self, tags: range | type[py_enum.Enum] | list[int], ways: int):
         self.counter = TaggedCounter("counter", "", tags=tags, ways=ways)
 
         self.cond = Signal(ways)
@@ -181,7 +182,7 @@ class TestTaggedCounter(TestCaseWithSimulator):
     def setup_method(self) -> None:
         random.seed(42)
 
-    def do_test_enum(self, tags: range | type[Enum] | list[int], tag_values: list[int], ways: int):
+    def do_test_enum(self, tags: range | type[py_enum.Enum] | list[int], tag_values: list[int], ways: int):
         DependencyContext.get().add_dependency(HwMetricsEnabledKey(), True)
         m = TaggedCounterCircuit(tags, ways)
 

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from amaranth.lib.data import ArrayLayout, StructLayout
 from dataclasses_json import dataclass_json
-from typing import Optional, Type, TypeVar
+from typing import Optional, TypeVar
 from abc import ABC
 from enum import Enum
 
@@ -290,7 +290,7 @@ class TaggedCounter(Elaboratable, HwMetric):
         fully_qualified_name: str,
         description: str = "",
         *,
-        tags: range | Type[Enum] | list[int],
+        tags: range | type[Enum] | list[int],
         registers_width: int = 32,
         ways: int = 1,
     ):
@@ -301,7 +301,7 @@ class TaggedCounter(Elaboratable, HwMetric):
             The fully qualified name of the metric.
         description: str
             A human-readable description of the metric's functionality.
-        tags: range | Type[Enum] | list[int]
+        tags: range | type[Enum] | list[int]
             Tag values.
         registers_width: int
             Width of the underlying registers. Defaults to 32 bits.
