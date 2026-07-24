@@ -277,8 +277,8 @@ class TaggedCounter(Elaboratable, HwMetric):
 
     Attributes
     ----------
-    tag_width: int
-        The length of the signal holding a tag value.
+    tag_shape: ShapeLike
+        The shape of the tags.
     one_hot: bool
         Whether tag values can be one-hot encoded.
     counters: dict[int, HwMetricRegisters]
@@ -317,12 +317,11 @@ class TaggedCounter(Elaboratable, HwMetric):
             counters_meta = [(i.value, i.name) for i in tags]
 
         if isinstance(tags, list):
-            tags_shape = range(min(tags), max(tags) + 1)
+            self.tag_shape = range(min(tags), max(tags) + 1)
         else:
-            tags_shape = tags
+            self.tag_shape = tags
 
         values = [value for value, _ in counters_meta]
-        self.tag_width = max(bits_for(max(values)), bits_for(min(values)))
 
         self.one_hot = True
         for value in values:
@@ -334,7 +333,7 @@ class TaggedCounter(Elaboratable, HwMetric):
             if 2**log != value:
                 self.one_hot = False
 
-        self.incr = self.wrap_method(Methods(ways, i=[("tag", tags_shape)]))
+        self.incr = self.wrap_method(Methods(ways, i=[("tag", self.tag_shape)]))
 
         self.counters: dict[int, HwMetricRegister] = {}
         for tag_value, name in counters_meta:
@@ -361,11 +360,11 @@ class TaggedCounter(Elaboratable, HwMetric):
         def _(k: int, tag):
             if self.one_hot:
                 sorted_tags = sorted(list(self.counters.keys()))
-                for i in OneHotSwitchDynamic(m, tag):
+                for i in OneHotSwitchDynamic(m, Value.cast(tag)):
                     m.d.comb += runs[sorted_tags[i]][k].eq(1)
             else:
                 for tag_value in self.counters.keys():
-                    with m.If(tag == tag_value):
+                    with m.If(Value.cast(tag) == tag_value):
                         m.d.comb += runs[tag_value][k].eq(1)
 
         for tag_value, counter in self.counters.items():

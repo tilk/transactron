@@ -162,7 +162,7 @@ class TaggedCounterCircuit(Elaboratable):
         self.counter = TaggedCounter("counter", "", tags=tags, ways=ways)
 
         self.cond = Signal(ways)
-        self.tag = Signal(ArrayLayout(self.counter.tag_width, ways))
+        self.tag = Signal(ArrayLayout(self.counter.tag_shape, ways))
 
     def elaborate(self, platform):
         m = TModule()
