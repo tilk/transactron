@@ -244,7 +244,11 @@ def switch_value(
         shape = cast(ShapeCastable, shapecastable_shapes[0])
         if any(case_shape != shape for case_shape in shapecastable_shapes):
             raise ValueError("Different ShapeCastables for different shapes")
-        return shape(SwitchValue(test, [(key, Value.cast(val)) for key, val in cases], src_loc=src_loc))
+
+        def unify(v):
+            return Value.cast(v) if isinstance(v, (Value, ValueCastable)) else Value.cast(shape.const(v))
+
+        return shape(SwitchValue(test, [(key, unify(val)) for key, val in cases], src_loc=src_loc))
     else:
         return SwitchValue(test, cases, src_loc=src_loc)
 
