@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Optional, Iterator
 from transactron.utils.typing import ValueBundle
 from transactron.utils.dependencies import DependencyContext
 from transactron.utils.transactron_helpers import get_caller_class_name, get_src_loc
+from transactron.utils.logging import HardwareLogger
 from .keys import *
 from contextlib import contextmanager
 from .body import Body, TBody
@@ -131,6 +132,19 @@ class Transaction(TransactionBase["Transaction | Method"]):
         with impl.context(m):
             with m.AvoidedIf(impl.run):
                 yield self
+
+    @contextmanager
+    def always_body(
+        self,
+        m: TModule,
+        log: HardwareLogger | None = None,
+    ) -> Iterator["Transaction"]:
+        log = log or HardwareLogger("global")
+
+        with self.body(m) as t:
+            yield t
+
+        log.assertion(m, self.run, f"Transaction '{self.name}' was not run", src_loc=self.src_loc)
 
     def __repr__(self) -> str:
         return "(transaction {})".format(self.name)
