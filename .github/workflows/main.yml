@@ -68,7 +68,7 @@ jobs:
 
       - name: Run pre-commit checks
         run: pre-commit run --all-files --show-diff-on-failure
-  
+
   coreblocks-synth-smoke-test:
     name: Coreblocks synthesis smoke test
     runs-on: ubuntu-latest
