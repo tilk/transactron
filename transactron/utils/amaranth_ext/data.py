@@ -2,10 +2,10 @@ from collections.abc import Callable, Sequence
 from typing import cast, overload
 from amaranth import Cat, Value
 from amaranth.lib import data
-from amaranth_types import ShapeLike
+from amaranth_types import ShapeLike, ValueLike
 
 
-__all__ = ["layout_keys", "transpose_layout", "transpose_layout_with_keys", "transpose"]
+__all__ = ["layout_keys", "transpose_layout", "transpose_layout_with_keys", "transpose", "data_as_dict"]
 
 
 @overload
@@ -158,3 +158,7 @@ def transpose(view: data.View | data.Const) -> data.View | data.Const:
         return ret_layout.const({i_key: {o_key: view[o_key][i_key] for o_key in o_keys} for i_key in i_keys})
     ret_target = Cat(Value.cast(view[o_key][i_key]) for i_key in i_keys for o_key in o_keys)
     return data.View(ret_layout, ret_target)
+
+
+def data_as_dict(view: data.View | data.Const) -> dict[str | int, ValueLike]:
+    return {k: view[k] for k, _ in view.shape()}
