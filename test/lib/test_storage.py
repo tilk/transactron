@@ -9,7 +9,7 @@ from hypothesis import given, settings, Phase
 import amaranth.lib.memory as memory
 import amaranth_types.memory as amemory
 from transactron.testing import *
-from transactron.testing.input_generation import OpNOP, generate_process_input
+from transactron.testing.input_generation import amaranth_consts, generate_process_input
 from transactron.lib.storage import *
 from transactron.utils.amaranth_ext.memory import MultiportXORMemory, MultiportXORILVTMemory, MultiportOneHotILVTMemory
 from transactron.utils.transactron_helpers import make_layout
@@ -48,7 +48,7 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
                 # wait till all processes will end the previous cycle
                 await sim.delay(1e-9)
                 elem = input_lst.pop()
-                if isinstance(elem, OpNOP):
+                if elem is None:
                     await sim.tick()
                     continue
                 if input_verification is not None and not input_verification(elem):
@@ -128,13 +128,18 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
         deadline=timedelta(milliseconds=2000),
     )
     @given(
-        generate_process_input(test_number, nop_number, [("addr", addr_layout), ("data", content_layout)]),
-        generate_process_input(test_number, nop_number, [("addr", addr_layout), ("data", content_layout)]),
-        generate_process_input(test_number, nop_number, [("addr", addr_layout)]),
-        generate_process_input(test_number, nop_number, [("addr", addr_layout)]),
+        generate_process_input(
+            test_number, nop_number, addr=amaranth_consts(addr_layout), data=amaranth_consts(content_layout)
+        ),
+        generate_process_input(
+            test_number, nop_number, addr=amaranth_consts(addr_layout), data=amaranth_consts(content_layout)
+        ),
+        generate_process_input(test_number, nop_number, addr=amaranth_consts(addr_layout)),
+        generate_process_input(test_number, nop_number, addr=amaranth_consts(addr_layout)),
     )
     @TestCaseWithSimulator.wrap_testing_env_next
     def test_random(self, in_push, in_write, in_read, in_remove):
+        print(in_push, in_write, in_read, in_remove)
         self.setUp()
         with self.run_simulation(self.circ, max_cycles=500) as sim:
             sim.add_testbench(self.push_process(in_push))
