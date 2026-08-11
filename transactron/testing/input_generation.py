@@ -11,6 +11,7 @@ from hypothesis.strategies import DrawFn, SearchStrategy
 
 __all__ = [
     "shrinkable_lists",
+    "sized_lists",
     "amaranth_consts",
     "amaranth_structs",
     "intersperse",
@@ -89,11 +90,11 @@ def amaranth_consts(draw: DrawFn, shape: ShapeLike) -> Any:
     elif isinstance(shape, py_enum.EnumType):
         return draw(st.sampled_from(shape))
     elif isinstance(shape, data.ArrayLayout):
-        return draw(st.lists(amaranth_consts(shape.elem_shape)))
+        return draw(st.lists(amaranth_consts(shape.elem_shape), min_size=shape.length, max_size=shape.length))
     elif isinstance(shape, data.StructLayout):
-        return draw(st.fixed_dictionaries({key: amaranth_consts(sh.shape) for key, sh in shape}))
+        return draw(st.fixed_dictionaries({key: amaranth_consts(fld.shape) for key, fld in shape}))
     elif isinstance(shape, data.UnionLayout):
-        return draw(st.one_of(*(st.fixed_dictionaries({key: amaranth_consts(sh.shape)}) for key, sh in shape)))
+        return draw(st.one_of(*(st.fixed_dictionaries({key: amaranth_consts(fld.shape)}) for key, fld in shape)))
     elif isinstance(shape, ShapeCastable):
         raise ValueError("Unsupported ShapeCastable")
 
