@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from typing import Any
 from amaranth import *
 from amaranth import ShapeCastable
@@ -60,6 +60,20 @@ def shrinkable_lists[T](draw: DrawFn, size: int, elements: SearchStrategy[T]) ->
 
 @st.composite
 def sized_lists[T](draw: DrawFn, size: SearchStrategy[int], elements: SearchStrategy[T]) -> list[T]:
+    """Returns a strategy which generates lists of size given by another strategy.
+
+    Parameters
+    ----------
+    size : SearchStrategy[int]
+        Size of the generated lists.
+    elements : SearchStrategy[T]
+        The strategy for list elements.
+
+    Returns
+    -------
+    SearchStrategy[list[T]]
+        The constructed strategy.
+    """
     size_val = draw(size)
     return draw(st.lists(elements, min_size=size_val, max_size=size_val))
 
@@ -100,9 +114,7 @@ def amaranth_consts(draw: DrawFn, shape: ShapeLike) -> Any:
 
 
 @st.composite
-def amaranth_structs(
-    draw: DrawFn, layout: data.StructLayout, *, override: Mapping[str, SearchStrategy] | None
-) -> dict[str, Any]:
+def amaranth_structs(draw: DrawFn, layout: data.StructLayout, **override: SearchStrategy) -> dict[str, Any]:
     """Returns a strategy which generates valid constants for structs.
 
     This differs from ``amaranth_consts`` in that the default strategy can
@@ -111,14 +123,15 @@ def amaranth_structs(
     Parameters
     ----------
     layout : data.StructLayout
+        Shape for which constants are generated.
+    **override : SearchStrategy
+        Overriding strategies for named layout fields.
 
     Returns
     -------
     SearchStrategy[dict[str, Any]]
         The constructed strategy.
     """
-    if override is None:
-        override = {}
     for key in override:
         if key not in layout.members:
             raise ValueError(f"Overridden key {key} not present in layout {layout}")
@@ -129,6 +142,23 @@ def amaranth_structs(
 
 @st.composite
 def intersperse[T, U](draw: DrawFn, seq: SearchStrategy[Iterable[T]], sep: SearchStrategy[Iterable[U]]) -> list[T | U]:
+    """Returns a strategy which generates lists with separators between elements.
+
+    Separators can consist of multiple elements, both lists and separators
+    are specified by parameters.
+
+    Parameters
+    ----------
+    seq : SearchStrategy[Iterable[T]]
+        The strategy for lists.
+    sep : SearchStrategy[Iterable[U]]
+        The strategy for separators.
+
+    Returns
+    -------
+    SearchStrategy[list[T | U]]
+        The constructed strategy.
+    """
     ret: list[T | U] = []
     for elem in draw(seq):
         ret.extend(draw(sep))
@@ -141,6 +171,25 @@ def intersperse[T, U](draw: DrawFn, seq: SearchStrategy[Iterable[T]], sep: Searc
 def intersperse_many[
     T, U
 ](draw: DrawFn, seq: SearchStrategy[Iterable[T]], sep: SearchStrategy[U], count: SearchStrategy[int]) -> list[T | U]:
+    """Returns a strategy which generates lists with separators between elements.
+
+    Separators consist of multiple elements drawn from a separate strategy. The
+    number of elements in a separator is also drawn from a strategy.
+
+    Parameters
+    ----------
+    seq : SearchStrategy[Iterable[T]]
+        The strategy for lists.
+    sep : SearchStrategy[U]
+        The strategy for separator elements.
+    count : SearchStrategy[int]
+        The strategy for the number of elements in a separator.
+
+    Returns
+    -------
+    SearchStrategy[list[T | U]]
+        The constructed strategy.
+    """
     return draw(intersperse(seq, sized_lists(count, sep)))
 
 
@@ -149,13 +198,59 @@ def intersperse_range[
 ](
     seq: SearchStrategy[Iterable[T]], sep: SearchStrategy[U], *, min_count: int = 0, max_count: int | None = None
 ) -> SearchStrategy[list[T | U]]:
+    """Returns a strategy which generates lists with separators between elements.
+
+    Separators consist of multiple elements drawn from a separate strategy. The
+    number of elements in a separator is given by numeric bounds.
+
+    Parameters
+    ----------
+    seq : SearchStrategy[Iterable[T]]
+        The strategy for lists.
+    sep : SearchStrategy[U]
+        The strategy for separator elements.
+    min_count : int, optional
+        Lower bound for the number of elements in a separator. If not given,
+        defaults to 0.
+    max_count : int, optional
+        Upper bound for the number of elements in a separator. If not given,
+        defaults to unbounded.
+
+    Returns
+    -------
+    SearchStrategy[list[T | U]]
+        The constructed strategy.
+    """
     return intersperse(seq, st.lists(sep, min_size=min_count, max_size=max_count))
 
 
 @st.composite
 def generate_process_input(
-    draw: DrawFn, count: int, max_nones: int, /, **strategies: SearchStrategy
+    draw: DrawFn, count: int, max_nones: int = 0, /, **strategies: SearchStrategy
 ) -> list[dict[str, Any] | None]:
+    """Useful shorthand for generating inputs for testing processes.
+
+    Each input consists of a dictionary, whose elements are drawn from given
+    strategies. Optionally, inputs can be interspersed by ``None``, which
+    means no input for a given cycle.
+
+    The inputs are generated as shrinkable lists so that short counterexamples
+    can be automatically constructed.
+
+    Parameters
+    ----------
+    count : int
+        Number of test inputs to generate.
+    max_nones : int, optional
+        Maximum number of empty inputs in a row. If not given, defaults to 0.
+    **strategies : SearchStrategy
+        Strategies for inputs. Generated values are grouped in a dictionary.
+
+    Returns
+    -------
+    SearchStrategy
+        The constructed strategy.
+    """
     return draw(
         intersperse_range(
             shrinkable_lists(count, st.fixed_dictionaries(strategies)), st.just(None), max_count=max_nones

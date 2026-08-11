@@ -1,10 +1,11 @@
-from typing import Any
+from typing import Any, cast
 from amaranth import Shape
 from amaranth_types import ShapeLike
 from amaranth.lib import data
 from transactron.testing.input_generation import *
 from hypothesis import given, settings, strategies as st
 import pytest
+import itertools
 import enum as py_enum
 
 
@@ -25,24 +26,22 @@ def test_shrinkable_lists(size: int):
     assert sizes.count(size) / len(sizes) >= 0.8
 
 
-@pytest.mark.parametrize("size_range", [(0, 5), (0, 20), (5, 20)])
-def test_sized_lists(size_range: tuple[int, int]):
+@pytest.mark.parametrize("size_range", [(0, 5), (0, 20), (5, 20), (3, 3)])
+def test_sized_lists_range(size_range: tuple[int, int]):
+    lo, hi = size_range
     sizes: list[int] = []
-    strategy = st.integers(min_value=size_range[0], max_value=size_range[1])
+    strategy = st.integers(min_value=lo, max_value=hi)
 
     @settings(max_examples=250)
     @given(sized_lists(strategy, st.integers()))
     def f(elems: list[int]):
         sizes.append(len(elems))
-        assert len(elems) <= size_range[1]
+        assert lo <= len(elems) and len(elems) <= hi
         assert all(isinstance(i, int) for i in elems)
 
     f()
 
-    # average of list sizes in the right ballpark
-    avg = sum(sizes) / len(sizes)
-    assert 0.2 * size_range[0] + 0.8 * size_range[1] >= avg
-    assert 0.2 * size_range[1] + 0.8 * size_range[0] <= avg
+    assert lo in sizes and hi in sizes
 
 
 def validate_const(shape: ShapeLike, v: Any):
@@ -113,16 +112,42 @@ def test_amaranth_consts(shape: ShapeLike):
 
 
 def test_amaranth_structs():
-    pass  # TODO
+    @given(amaranth_structs(data.StructLayout({"a": 5, "b": FooEnum}), a=st.just(1)))
+    def f(v):
+        assert isinstance(v, dict)
+        assert v["a"] == 1
+        validate_const(FooEnum, v["b"])
+
+    f()
 
 
-def test_intersperse():
-    pass  # TODO
+@given(st.lists(st.integers(), max_size=10), st.lists(st.integers(), max_size=3), st.data())
+def test_intersperse(seq_list: list[int], sep_list: list[int], data: st.DataObject):
+    result = data.draw(intersperse(st.just(seq_list), st.just(sep_list)))
+    expected = list(itertools.chain(sep_list, *(itertools.chain([elem], sep_list) for elem in seq_list)))
+    assert result == expected
 
 
-def test_intersperse_many():
-    pass  # TODO
+@given(st.lists(st.integers(), max_size=10), st.integers(), st.integers(min_value=0, max_value=4), st.data())
+def test_intersperse_many(seq_list: list[int], sep: int, k: int, data: st.DataObject):
+    result = data.draw(intersperse_many(st.just(seq_list), st.just(sep), st.just(k)))
+    sep_list = [sep] * k
+    expected = list(itertools.chain(sep_list, *(itertools.chain([elem], sep_list) for elem in seq_list)))
+    assert result == expected
 
 
-def test_intersperse_range():
-    pass  # TODO
+@given(st.integers(0, 5), st.lists(st.integers(), max_size=10), st.data())
+def test_intersperse_range(lo: int, seq_list: list[int], data: st.DataObject):
+    hi = data.draw(st.one_of(st.integers(lo, 5), st.just(None)))
+    result = data.draw(intersperse_range(st.just(seq_list), st.just("sep"), min_count=lo, max_count=hi))
+
+    groups = [list(group) for is_str, group in itertools.groupby(result, lambda x: isinstance(x, str)) if is_str]
+    groups = cast(list[list[str]], groups)
+
+    assert len(groups) <= len(seq_list) + 1
+    if lo:
+        assert len(groups) == len(seq_list) + 1
+    assert all(lo <= len(gr) for gr in groups)
+    if hi is not None:
+        assert all(hi >= len(gr) for gr in groups)
+    assert [x for x in result if isinstance(x, int)] == seq_list
