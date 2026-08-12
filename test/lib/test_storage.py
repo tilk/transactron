@@ -9,7 +9,7 @@ from hypothesis import given, settings, Phase
 import amaranth.lib.memory as memory
 import amaranth_types.memory as amemory
 from transactron.testing import *
-from transactron.testing.input_generation import OpNOP, generate_process_input
+from transactron.testing.input_generation import amaranth_structs, generate_input
 from transactron.lib.storage import *
 from transactron.utils.amaranth_ext.memory import MultiportXORMemory, MultiportXORILVTMemory, MultiportOneHotILVTMemory
 from transactron.utils.transactron_helpers import make_layout
@@ -48,7 +48,7 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
                 # wait till all processes will end the previous cycle
                 await sim.delay(1e-9)
                 elem = input_lst.pop()
-                if isinstance(elem, OpNOP):
+                if elem is None:
                     await sim.tick()
                     continue
                 if input_verification is not None and not input_verification(elem):
@@ -97,7 +97,21 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
             if frozenset(elem["addr"].items()) in self.memory:
                 del self.memory[frozenset(elem["addr"].items())]
 
-        return self.generic_process(self.circ.remove, in_remove, state_change=modify_state, settle_count=2, name="remv")
+        p = self.generic_process(self.circ.remove, in_remove, state_change=modify_state, settle_count=2, name="remv")
+
+        async def process(sim: TestbenchContext):
+            await p(sim)
+
+            # The input generator doesn't guarantee that every data gets freed, which leads to lockups.
+            # This hack cleans the memory, allowing tests to complete.
+            while True:
+                while not self.memory:
+                    await sim.tick()
+                addr = next(iter(self.memory.keys()))
+                del self.memory[addr]
+                await self.circ.remove.call(sim, addr=dict(addr))
+
+        return process
 
     def write_process(self, in_write):
         def verify_in(elem):
@@ -128,10 +142,10 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
         deadline=timedelta(milliseconds=2000),
     )
     @given(
-        generate_process_input(test_number, nop_number, [("addr", addr_layout), ("data", content_layout)]),
-        generate_process_input(test_number, nop_number, [("addr", addr_layout), ("data", content_layout)]),
-        generate_process_input(test_number, nop_number, [("addr", addr_layout)]),
-        generate_process_input(test_number, nop_number, [("addr", addr_layout)]),
+        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout, "data": content_layout})),
+        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout, "data": content_layout})),
+        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout})),
+        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout})),
     )
     @TestCaseWithSimulator.wrap_testing_env_next
     def test_random(self, in_push, in_write, in_read, in_remove):
@@ -140,7 +154,7 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
             sim.add_testbench(self.push_process(in_push))
             sim.add_testbench(self.read_process(in_read))
             sim.add_testbench(self.write_process(in_write))
-            sim.add_testbench(self.remove_process(in_remove))
+            sim.add_testbench(self.remove_process(in_remove), background=True)
 
 
 bank_shapes = [
