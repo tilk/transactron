@@ -2,14 +2,20 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 from amaranth import *
 from amaranth import ShapeCastable
+from amaranth.sim._async import SimulatorContext
 from amaranth_types import ShapeLike
 import hypothesis.strategies as st
 import enum as py_enum
+import math
 from amaranth.lib import data
-from hypothesis.strategies import DrawFn, SearchStrategy
+from hypothesis.strategies import DataObject, DrawFn, SearchStrategy
+from .simulator import tick
 
 
 __all__ = [
+    "geometric",
+    "geometric_integer",
+    "draw_wait_geom",
     "shrinkable_lists",
     "sized_lists",
     "amaranth_consts",
@@ -19,6 +25,26 @@ __all__ = [
     "intersperse_range",
     "generate_input",
 ]
+
+
+def geometric(prob: float) -> SearchStrategy[float]:
+    assert prob > 0 and prob <= 1
+    return st.floats(min_value=0, max_value=1, exclude_max=True).map(
+        lambda u: math.log1p(-u) / math.log1p(-prob)
+    )
+
+
+def geometric_integer(prob: float, max_value: int | None = None) -> SearchStrategy[int]:
+    def f(val: float):
+        if max_value is None:
+            return math.floor(val)
+        else:
+            return min(max_value, math.floor(val))
+    return geometric(prob).map(f)
+
+
+async def draw_wait_geom(ctx: SimulatorContext, data: DataObject, prob: float = 0.5, max_cycle_cnt: int = 2**16):
+    await tick(ctx, data.draw(geometric_integer(prob, max_cycle_cnt)))
 
 
 @st.composite

@@ -105,8 +105,10 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
             # The input generator doesn't guarantee that every data gets freed, which leads to lockups.
             # This hack cleans the memory, allowing tests to complete.
             while True:
+                await sim.delay(5e-9)
                 while not self.memory:
                     await sim.tick()
+                    await sim.delay(5e-9)
                 addr = next(iter(self.memory.keys()))
                 del self.memory[addr]
                 await self.circ.remove.call(sim, addr=dict(addr))
@@ -147,7 +149,6 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
         generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout})),
         generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout})),
     )
-    @TestCaseWithSimulator.wrap_testing_env_next
     def test_random(self, in_push, in_write, in_read, in_remove):
         self.setUp()
         with self.run_simulation(self.circ, max_cycles=500) as sim:
