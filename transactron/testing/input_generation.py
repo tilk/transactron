@@ -17,7 +17,7 @@ __all__ = [
     "intersperse",
     "intersperse_many",
     "intersperse_range",
-    "generate_process_input",
+    "generate_input",
 ]
 
 
@@ -225,14 +225,11 @@ def intersperse_range[
 
 
 @st.composite
-def generate_process_input(
-    draw: DrawFn, count: int, max_nones: int = 0, /, **strategies: SearchStrategy
-) -> list[dict[str, Any] | None]:
+def generate_input[T](draw: DrawFn, count: int, max_nones: int, strategy: SearchStrategy[T]) -> list[T | None]:
     """Useful shorthand for generating inputs for testing processes.
 
-    Each input consists of a dictionary, whose elements are drawn from given
-    strategies. Optionally, inputs can be interspersed by ``None``, which
-    means no input for a given cycle.
+    Optionally, inputs can be interspersed by ``None``, which means no input for
+    a given cycle.
 
     The inputs are generated as shrinkable lists so that short counterexamples
     can be automatically constructed.
@@ -241,18 +238,14 @@ def generate_process_input(
     ----------
     count : int
         Number of test inputs to generate.
-    max_nones : int, optional
+    max_nones : int
         Maximum number of empty inputs in a row. If not given, defaults to 0.
-    **strategies : SearchStrategy
-        Strategies for inputs. Generated values are grouped in a dictionary.
+    strategy : SearchStrategy
+        Strategy for inputs.
 
     Returns
     -------
     SearchStrategy
         The constructed strategy.
     """
-    return draw(
-        intersperse_range(
-            shrinkable_lists(count, st.fixed_dictionaries(strategies)), st.just(None), max_count=max_nones
-        )
-    )
+    return draw(intersperse_range(shrinkable_lists(count, strategy), st.just(None), max_count=max_nones))
