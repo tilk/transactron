@@ -1,4 +1,4 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 from amaranth import *
 from amaranth import ShapeCastable
@@ -114,7 +114,9 @@ def amaranth_consts(draw: DrawFn, shape: ShapeLike) -> Any:
 
 
 @st.composite
-def amaranth_structs(draw: DrawFn, layout: data.StructLayout, **override: SearchStrategy) -> dict[str, Any]:
+def amaranth_structs(
+    draw: DrawFn, layout: data.StructLayout | Mapping[str, ShapeLike], **override: SearchStrategy
+) -> dict[str, Any]:
     """Returns a strategy which generates valid constants for structs.
 
     This differs from ``amaranth_consts`` in that the default strategy can
@@ -122,7 +124,7 @@ def amaranth_structs(draw: DrawFn, layout: data.StructLayout, **override: Search
 
     Parameters
     ----------
-    layout : data.StructLayout
+    layout : data.StructLayout | Mapping[str, ShapeLike]
         Shape for which constants are generated.
     **override : SearchStrategy
         Overriding strategies for named layout fields.
@@ -132,6 +134,9 @@ def amaranth_structs(draw: DrawFn, layout: data.StructLayout, **override: Search
     SearchStrategy[dict[str, Any]]
         The constructed strategy.
     """
+    if not isinstance(layout, data.StructLayout):
+        layout = data.StructLayout(layout)
+
     for key in override:
         if key not in layout.members:
             raise ValueError(f"Overridden key {key} not present in layout {layout}")

@@ -7,10 +7,9 @@ from collections import deque
 from datetime import timedelta
 from hypothesis import given, settings, Phase
 import amaranth.lib.memory as memory
-import amaranth.lib.data as data
 import amaranth_types.memory as amemory
 from transactron.testing import *
-from transactron.testing.input_generation import amaranth_consts, generate_input
+from transactron.testing.input_generation import amaranth_structs, generate_input
 from transactron.lib.storage import *
 from transactron.utils.amaranth_ext.memory import MultiportXORMemory, MultiportXORILVTMemory, MultiportOneHotILVTMemory
 from transactron.utils.transactron_helpers import make_layout
@@ -143,26 +142,13 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
         deadline=timedelta(milliseconds=2000),
     )
     @given(
-        generate_input(
-            test_number, nop_number, amaranth_consts(data.StructLayout({"addr": addr_layout, "data": content_layout}))
-        ),
-        generate_input(
-            test_number, nop_number, amaranth_consts(data.StructLayout({"addr": addr_layout, "data": content_layout}))
-        ),
-        generate_input(test_number, nop_number, amaranth_consts(data.StructLayout({"addr": addr_layout}))),
-        generate_input(test_number, nop_number, amaranth_consts(data.StructLayout({"addr": addr_layout}))),
+        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout, "data": content_layout})),
+        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout, "data": content_layout})),
+        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout})),
+        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout})),
     )
     @TestCaseWithSimulator.wrap_testing_env_next
     def test_random(self, in_push, in_write, in_read, in_remove):
-        # TODO: the following is a hack to make the test not freeze up.
-        # The test
-        #        addrs = set()
-        #        for v_push in in_push:
-        #            if v_push is not None:
-        #                addrs.add(v_push["addr"]["data"])
-        #        in_remove += [{"addr": {"data": 0}}] * max(0, len(in_push) - len(in_remove))
-        #        in_remove += [{"addr": {"data": addr}} for addr in addrs]
-
         self.setUp()
         with self.run_simulation(self.circ, max_cycles=500) as sim:
             sim.add_testbench(self.push_process(in_push))
