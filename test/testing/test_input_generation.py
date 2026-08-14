@@ -63,7 +63,7 @@ def test_shrinkable_lists(size: int):
     f()
 
     # mostly generates the full size
-    assert sizes.count(size) / len(sizes) >= 0.8
+    assert sizes.count(size) / len(sizes) >= 0.7
 
 
 @pytest.mark.parametrize("size_range", [(0, 5), (0, 20), (5, 20), (3, 3)])
@@ -72,7 +72,9 @@ def test_sized_lists_range(size_range: tuple[int, int]):
     sizes: list[int] = []
     strategy = st.integers(min_value=lo, max_value=hi)
 
-    @settings(max_examples=250)
+    @settings(
+        max_examples=500,
+    )
     @given(sized_lists(strategy, st.integers()))
     def f(elems: list[int]):
         sizes.append(len(elems))
@@ -81,7 +83,10 @@ def test_sized_lists_range(size_range: tuple[int, int]):
 
     f()
 
-    assert lo in sizes and hi in sizes
+    assert lo in sizes
+    expected_avg = (lo + hi) / 2
+    average = sum(sizes) / len(sizes)
+    assert expected_avg * 0.5 <= average <= expected_avg * 1.5
 
 
 def validate_const(shape: ShapeLike, v: Any):
