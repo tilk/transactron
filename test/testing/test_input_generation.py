@@ -6,7 +6,30 @@ from transactron.testing.input_generation import *
 from hypothesis import given, settings, strategies as st
 import pytest
 import itertools
+import math
 import enum as py_enum
+
+
+@pytest.mark.parametrize("prob", [0.2, 0.5, 0.8])
+def test_geometric(prob: float):
+    values: list[int] = []
+
+    expected_avg = (1 - prob) / prob
+
+    # Max value is given because Hypothesis generates outliers more often than distribution implies
+
+    @settings(max_examples=500)
+    @given(geometric(prob, math.ceil(expected_avg * 20)))
+    def f(val):
+        values.append(val)
+        assert isinstance(val, int)
+        assert val >= 0
+
+    f()
+
+    # average is in the right ballpark
+    average = sum(values) / len(values)
+    assert expected_avg / 3 <= average <= expected_avg * 3
 
 
 @pytest.mark.parametrize("value", [10, 1000])
@@ -17,6 +40,7 @@ def test_shrinkable_constants(value: int):
     @given(shrinkable_constants(value))
     def f(val):
         values.append(val)
+        assert isinstance(val, int)
         assert val <= value
 
     f()
