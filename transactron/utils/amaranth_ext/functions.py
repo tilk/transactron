@@ -33,6 +33,12 @@ __all__ = [
     "switch_value",
     "mux",
     "one_hot_mux",
+    "extract_lowest_set_bit",
+    "clear_lowest_set_bit",
+    "mask_from_first_set_bit",
+    "mask_after_first_set_bit",
+    "mask_until_first_set_bit",
+    "mask_before_first_set_bit",
 ]
 
 
@@ -370,7 +376,7 @@ def one_hot_mux(
             src_loc=1,
         )
 
-    select_first = (select & (~select + 1))[: len(inputs)]
+    select_first = extract_lowest_set_bit(select)
     select_one_hot = select_first if priority else select
 
     if not priority and assert_one_hot:
@@ -388,3 +394,57 @@ def one_hot_mux(
         return shape_cast(all_data[0])
 
     return shape_cast(or_value([Mux(all_sel[i], all_data[i], C(0, 0)) for i in range(len(all_data))]))
+
+
+def extract_lowest_set_bit(value: Value) -> Value:
+    """
+    Extracts the least significant set bit from the input value.
+    If no bits are set, returns ``0``.
+    For example ``0b010100`` -> ``0b000100``.
+    Same as: ``(1 << count_trailing_zeros(value))[: len(value)]``.
+    """
+    return (value & -value)[: len(value)]
+
+
+def clear_lowest_set_bit(value: Value) -> Value:
+    """
+    Clears the least significant set bit from the input value.
+    If no bits are set, returns ``0``.
+    For example ``0b110100`` -> ``0b110000``.
+    Same as: ``value & ~extract_lowest_set_bit(value)``
+    """
+    return (value & (value - 1))[: len(value)]
+
+
+def mask_from_first_set_bit(value: Value) -> Value:
+    """
+    Generates a mask from the least significant set bit (inclusive) in the input value upto its length.
+    For example ``0b010100`` -> ``0b111100``.
+    Same as: ``(-1 << count_trailing_zeros(value))[: len(value)]``.
+    """
+    return (value | -value)[: len(value)]
+
+
+def mask_after_first_set_bit(value: Value) -> Value:
+    """
+    Generates a mask from the least significant set bit (exclusive) in the input value upto its length.
+    For example ``0b010100`` -> ``0b111000``.
+    """
+    return (mask_from_first_set_bit(value) << 1)[: len(value)]
+
+
+def mask_until_first_set_bit(value: Value) -> Value:
+    """
+    Generates a mask from the 0-th bit upto the least significant set bit in the input (inclusive).
+    For example ``0b010100`` -> ``0b000111``.
+    """
+    return ~mask_after_first_set_bit(value)
+
+
+def mask_before_first_set_bit(value: Value) -> Value:
+    """
+    Generates a mask from the 0-th bit upto the least significant set bit in the input (exclusive).
+    For example ``0b010100`` -> ``0b000011``.
+    Same as: ``extract_lowest_set_bit(value) - 1``.
+    """
+    return ~mask_from_first_set_bit(value)
