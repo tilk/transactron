@@ -1,7 +1,7 @@
 import pytest
 from transactron.lib.stack import Stack
 from transactron.testing import TestCaseWithSimulator, data_layout, TestbenchContext, SimpleTestCircuit
-from transactron.testing.input_generation import draw_wait_geom
+from transactron.testing.input_generation import draw_wait_geom, shrinkable_constants
 from hypothesis import given, settings
 import hypothesis.strategies as st
 
@@ -16,7 +16,7 @@ class TestStack(TestCaseWithSimulator):
         circ = SimpleTestCircuit(Stack(layout=layout, depth=depth))
         stk: list[int] = []
 
-        cycles = 100
+        cycles = data.draw(shrinkable_constants(100), label="cycles")
 
         self.done = False
 
@@ -24,8 +24,7 @@ class TestStack(TestCaseWithSimulator):
             for _ in range(cycles):
                 await draw_wait_geom(sim, data, 0.5)
 
-                v = data.draw(st.integers(0, 2**width-1))
-                #print(v)
+                v = data.draw(st.integers(0, 2**width - 1), label="val")
                 await circ.write.call(sim, data=v)
                 await sim.delay(2e-9)
                 stk.append(v)

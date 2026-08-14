@@ -9,6 +9,22 @@ import itertools
 import enum as py_enum
 
 
+@pytest.mark.parametrize("value", [10, 1000])
+def test_shrinkable_constants(value: int):
+    values: list[int] = []
+
+    @settings(max_examples=200)
+    @given(shrinkable_constants(value))
+    def f(val):
+        values.append(val)
+        assert val <= value
+
+    f()
+
+    # mostly generates the constant value
+    assert values.count(value) / len(values) >= 0.8
+
+
 @pytest.mark.parametrize("size", [5, 20])
 def test_shrinkable_lists(size: int):
     sizes: list[int] = []

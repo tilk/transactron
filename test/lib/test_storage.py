@@ -20,7 +20,7 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
     addr_width = 4
     content_width = 5
     test_number = 30
-    nop_number = 3
+    max_nop = 3
     addr_layout = data_layout(addr_width)
     content_layout = data_layout(content_width)
 
@@ -144,10 +144,10 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
         deadline=timedelta(milliseconds=2000),
     )
     @given(
-        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout, "data": content_layout})),
-        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout, "data": content_layout})),
-        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout})),
-        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout})),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout, "data": content_layout}), max_nones=max_nop),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout, "data": content_layout}), max_nones=max_nop),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout}), max_nones=max_nop),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout}), max_nones=max_nop),
     )
     def test_random(self, in_push, in_write, in_read, in_remove):
         self.setUp()
