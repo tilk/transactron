@@ -2,14 +2,21 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 from amaranth import *
 from amaranth import ShapeCastable
+from amaranth.sim._async import SimulatorContext
 from amaranth_types import ShapeLike
 import hypothesis.strategies as st
 import enum as py_enum
+import math
 from amaranth.lib import data
-from hypothesis.strategies import DrawFn, SearchStrategy
+from hypothesis.strategies import DataObject, DrawFn, SearchStrategy
+from .simulator import tick
 
 
 __all__ = [
+    "exponential",
+    "geometric",
+    "draw_wait_geom",
+    "shrinkable_constants",
     "shrinkable_lists",
     "sized_lists",
     "amaranth_consts",
@@ -19,6 +26,81 @@ __all__ = [
     "intersperse_range",
     "generate_input",
 ]
+
+
+def exponential(rate: float, max_value: float = math.inf) -> SearchStrategy[float]:
+    """Returns a strategy which generates exponentially distributed floats.
+
+    The distribution is not perfect, but the values shrink to 0.
+
+    Parameters
+    ----------
+    rate : float
+        Rate parameter.
+    max_value : float, optional
+        Maximum generated value. If omitted, no upper bound.
+
+    Returns
+    -------
+    SearchStrategy[float]
+        The constructed strategy.
+    """
+    assert rate > 0
+    return st.floats(min_value=0, max_value=1, exclude_max=True).map(lambda u: min(max_value, -math.log1p(-u) / rate))
+
+
+def geometric(prob: float, max_value: int | None = None) -> SearchStrategy[int]:
+    """Returns a strategy which generates geometrically distributed integers.
+
+    The distribution is not perfect, but the values shrink to 0.
+
+    Parameters
+    ----------
+    prob : float
+        Success probability.
+    max_value : int, optional
+        Maximum generated value. If omitted, no upper bound.
+
+    Returns
+    -------
+    SearchStrategy[int]
+        The constructed strategy.
+    """
+
+    def f(val: float):
+        if max_value is None:
+            return math.floor(val)
+        else:
+            return min(max_value, math.floor(val))
+
+    return exponential(-math.log1p(-prob)).map(f)
+
+
+async def draw_wait_geom(ctx: SimulatorContext, data: DataObject, prob: float = 0.5, max_cycle_cnt: int = 32):
+    """Awaits a random, geometrically distributed number of cycles.
+
+    This is a Hypothesis compatible equivalent of ``random_wait_geom``.
+    """
+    await tick(ctx, data.draw(geometric(prob, max_cycle_cnt), label="wait"))
+
+
+def shrinkable_constants(n: int) -> SearchStrategy[int]:
+    """Returns a strategy which generates an almost constant integer, but shrinkable to 0.
+
+    This allows to write tests which usually do someting a constant amount of times,
+    which can be reduced when searching for a counterexample.
+
+    Parameters
+    ----------
+    n : int
+        The value of the constant.
+
+    Returns
+    -------
+    SearchStrategy[int]
+        The constructed strategy.
+    """
+    return st.integers(min_value=0, max_value=100 * n).map(lambda x: min(x, n))
 
 
 @st.composite
@@ -230,11 +312,14 @@ def intersperse_range[
 
 
 @st.composite
-def generate_input[T](draw: DrawFn, count: int, max_nones: int, strategy: SearchStrategy[T]) -> list[T | None]:
+def generate_input[
+    T
+](draw: DrawFn, count: int, strategy: SearchStrategy[T], prob: float = 0.5, max_nones: int = 32) -> list[T | None]:
     """Useful shorthand for generating inputs for testing processes.
 
-    Optionally, inputs can be interspersed by ``None``, which means no input for
-    a given cycle.
+    Inputs are interspersed by ``None``, which means no input for a given cycle.
+    The delays are geometrically distributed. For some test runs, ``None`` will
+    not be included.
 
     The inputs are generated as shrinkable lists so that short counterexamples
     can be automatically constructed.
@@ -243,14 +328,17 @@ def generate_input[T](draw: DrawFn, count: int, max_nones: int, strategy: Search
     ----------
     count : int
         Number of test inputs to generate.
-    max_nones : int
-        Maximum number of empty inputs in a row. If not given, defaults to 0.
     strategy : SearchStrategy
         Strategy for inputs.
+    max_nones : int
+        Maximum number of empty inputs in a row. If not given, defaults to
+        some preset default.
 
     Returns
     -------
     SearchStrategy
         The constructed strategy.
     """
-    return draw(intersperse_range(shrinkable_lists(count, strategy), st.just(None), max_count=max_nones))
+    do_intersperse = draw(st.booleans())
+    sep_strategy = geometric(prob, max_nones) if do_intersperse else st.just(0)
+    return draw(intersperse_many(shrinkable_lists(count, strategy), st.just(None), sep_strategy))

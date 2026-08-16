@@ -20,7 +20,7 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
     addr_width = 4
     content_width = 5
     test_number = 30
-    nop_number = 3
+    max_nop = 3
     addr_layout = data_layout(addr_width)
     content_layout = data_layout(content_width)
 
@@ -105,8 +105,10 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
             # The input generator doesn't guarantee that every data gets freed, which leads to lockups.
             # This hack cleans the memory, allowing tests to complete.
             while True:
+                await sim.delay(5e-9)
                 while not self.memory:
                     await sim.tick()
+                    await sim.delay(5e-9)
                 addr = next(iter(self.memory.keys()))
                 del self.memory[addr]
                 await self.circ.remove.call(sim, addr=dict(addr))
@@ -138,16 +140,14 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
     @settings(
         max_examples=10,
         phases=(Phase.explicit, Phase.reuse, Phase.generate, Phase.shrink),
-        derandomize=True,
         deadline=timedelta(milliseconds=2000),
     )
     @given(
-        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout, "data": content_layout})),
-        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout, "data": content_layout})),
-        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout})),
-        generate_input(test_number, nop_number, amaranth_structs({"addr": addr_layout})),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout, "data": content_layout}), max_nones=max_nop),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout, "data": content_layout}), max_nones=max_nop),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout}), max_nones=max_nop),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout}), max_nones=max_nop),
     )
-    @TestCaseWithSimulator.wrap_testing_env_next
     def test_random(self, in_push, in_write, in_read, in_remove):
         self.setUp()
         with self.run_simulation(self.circ, max_cycles=500) as sim:

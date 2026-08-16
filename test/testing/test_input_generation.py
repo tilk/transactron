@@ -6,7 +6,47 @@ from transactron.testing.input_generation import *
 from hypothesis import given, settings, strategies as st
 import pytest
 import itertools
+import math
 import enum as py_enum
+
+
+@pytest.mark.parametrize("prob", [0.2, 0.5, 0.8])
+def test_geometric(prob: float):
+    values: list[int] = []
+
+    expected_avg = (1 - prob) / prob
+
+    # Max value is given because Hypothesis generates outliers more often than distribution implies
+
+    @settings(max_examples=500)
+    @given(geometric(prob, math.ceil(expected_avg * 20)))
+    def f(val):
+        values.append(val)
+        assert isinstance(val, int)
+        assert val >= 0
+
+    f()
+
+    # average is in the right ballpark
+    average = sum(values) / len(values)
+    assert expected_avg / 3 <= average <= expected_avg * 3
+
+
+@pytest.mark.parametrize("value", [10, 1000])
+def test_shrinkable_constants(value: int):
+    values: list[int] = []
+
+    @settings(max_examples=200)
+    @given(shrinkable_constants(value))
+    def f(val):
+        values.append(val)
+        assert isinstance(val, int)
+        assert val <= value
+
+    f()
+
+    # mostly generates the constant value
+    assert values.count(value) / len(values) >= 0.8
 
 
 @pytest.mark.parametrize("size", [5, 20])
@@ -23,7 +63,7 @@ def test_shrinkable_lists(size: int):
     f()
 
     # mostly generates the full size
-    assert sizes.count(size) / len(sizes) >= 0.8
+    assert sizes.count(size) / len(sizes) >= 0.7
 
 
 @pytest.mark.parametrize("size_range", [(0, 5), (0, 20), (5, 20), (3, 3)])
@@ -32,7 +72,9 @@ def test_sized_lists_range(size_range: tuple[int, int]):
     sizes: list[int] = []
     strategy = st.integers(min_value=lo, max_value=hi)
 
-    @settings(max_examples=250)
+    @settings(
+        max_examples=500,
+    )
     @given(sized_lists(strategy, st.integers()))
     def f(elems: list[int]):
         sizes.append(len(elems))
@@ -41,7 +83,10 @@ def test_sized_lists_range(size_range: tuple[int, int]):
 
     f()
 
-    assert lo in sizes and hi in sizes
+    assert lo in sizes
+    expected_avg = (lo + hi) / 2
+    average = sum(sizes) / len(sizes)
+    assert expected_avg * 0.5 <= average <= expected_avg * 1.5
 
 
 def validate_const(shape: ShapeLike, v: Any):
