@@ -11,9 +11,19 @@ changelog:
     - title: 🚀 New Features
       labels:
         - enhancement
+      exclude:
+        labels:
+          - infrastructure
+          - documentation
+          - tests
     - title: 🐛 Bug Fixes
       labels:
         - bug
+      exclude:
+        labels:
+          - infrastructure
+          - documentation
+          - tests
     - title: 📚 Documentation
       labels:
         - documentation
