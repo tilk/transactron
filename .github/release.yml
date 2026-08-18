@@ -5,10 +5,10 @@ changelog:
     authors:
       - dependabot
   categories:
-    - title: ⚠️ Breaking Changes
+    - title: Breaking Changes
       labels:
         - breaking-change
-    - title: 🚀 New Features
+    - title: New Features
       labels:
         - enhancement
       exclude:
@@ -16,7 +16,7 @@ changelog:
           - infrastructure
           - documentation
           - tests
-    - title: 🐛 Bug Fixes
+    - title: Bug Fixes
       labels:
         - bug
       exclude:
@@ -24,10 +24,10 @@ changelog:
           - infrastructure
           - documentation
           - tests
-    - title: 📚 Documentation
+    - title: Documentation
       labels:
         - documentation
-    - title: 🧰 Maintenance
+    - title: Maintenance
       labels:
         - infrastructure
         - tests
