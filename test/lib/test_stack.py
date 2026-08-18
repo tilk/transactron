@@ -8,7 +8,7 @@ import hypothesis.strategies as st
 
 class TestStack(TestCaseWithSimulator):
     @pytest.mark.parametrize("depth", [5, 4])
-    @settings(max_examples=10, deadline=1000)
+    @settings(max_examples=10)
     @given(st.data())
     def test_randomized(self, depth, data: st.DataObject):
         width = 8
