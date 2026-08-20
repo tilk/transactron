@@ -499,5 +499,5 @@ def to_signal(m: ModuleLike, value: ValueLike) -> Signal | ValueCastable:
     """
     sig = Signal.like(value)
     top_m = top_module(m)
-    top_m.comb += Value.cast(sig).eq(Value.cast(value))
+    top_m.d.comb += Value.cast(sig).eq(Value.cast(value))
     return sig
