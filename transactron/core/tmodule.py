@@ -215,6 +215,8 @@ class TModule(ModuleLike, Elaboratable):
         self.fsm: Optional[FSM] = None
         self.uid = TModule.__next_uid
         self.path_builder = CtrlPathBuilder(self.uid)
+        self.main_module.submodules._avoiding_module = self.avoiding_module
+        self.main_module.submodules._top_module = self.top_module
         TModule.__next_uid += 1
 
     @_guardedcontextmanager("AvoidedIf")
@@ -305,6 +307,4 @@ class TModule(ModuleLike, Elaboratable):
         self.top_module._MustUse__silence = value  # type: ignore
 
     def elaborate(self, platform):
-        self.main_module.submodules._avoiding_module = self.avoiding_module
-        self.main_module.submodules._top_module = self.top_module
         return self.main_module
