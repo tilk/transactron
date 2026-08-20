@@ -4,7 +4,7 @@ from amaranth import ShapeCastable
 from amaranth import ValueCastable
 from amaranth.lib import data, enum
 from amaranth_types import ValueLike
-from transactron.utils.amaranth_ext import mux
+from transactron.utils.amaranth_ext import mux, to_signal
 from transactron.testing import TestCaseWithSimulator, TestbenchContext
 
 
@@ -131,6 +131,43 @@ class TestMux(TestCaseWithSimulator):
                 ctx.set(in2, {"x": in2_val})
                 out_val = ctx.get(out).x
                 assert out_val == (in1_val if sel_val else in2_val)
+
+        with self.run_simulation(m) as sim:
+            sim.add_testbench(tb)
+
+
+class TestToSignal(TestCaseWithSimulator):
+    def test_value(self):
+        m = Module()
+        sig = Signal(signed(8))
+        out = to_signal(m, ~sig)
+
+        assert isinstance(out, Signal)
+
+        async def tb(ctx: TestbenchContext):
+            for i in range(100):
+                val = random.randrange(-(2 ** (sig.shape().width - 1)), 2 ** (sig.shape().width - 1))
+                ctx.set(sig, val)
+                out_val = ctx.get(out)
+                assert out_val == ~val
+
+        with self.run_simulation(m) as sim:
+            sim.add_testbench(tb)
+
+    def test_struct(self):
+        m = Module()
+        sig = Signal(signed(8))
+        out = to_signal(m, data.StructLayout({"x": signed(8)})(~sig))
+
+        assert isinstance(out, data.View)
+        assert isinstance(out.as_value(), Signal)
+
+        async def tb(ctx: TestbenchContext):
+            for i in range(100):
+                val = random.randrange(-(2 ** (sig.shape().width - 1)), 2 ** (sig.shape().width - 1))
+                ctx.set(sig, val)
+                out_val = ctx.get(out.x)
+                assert out_val == ~val
 
         with self.run_simulation(m) as sim:
             sim.add_testbench(tb)
