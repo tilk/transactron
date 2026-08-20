@@ -1,10 +1,13 @@
+from collections.abc import Callable
 import random
+import pytest
 from amaranth import *
 from amaranth import ShapeCastable
 from amaranth import ValueCastable
 from amaranth.lib import data, enum
-from amaranth_types import ValueLike
-from transactron.utils.amaranth_ext import mux, to_signal
+from amaranth_types import ModuleLike, ValueLike
+from transactron.utils.amaranth_ext import mux, to_signal, top_module
+from transactron.core.tmodule import TModule
 from transactron.testing import TestCaseWithSimulator, TestbenchContext
 
 
@@ -134,6 +137,23 @@ class TestMux(TestCaseWithSimulator):
 
         with self.run_simulation(m) as sim:
             sim.add_testbench(tb)
+
+
+class TestTopModule:
+    def test_top_module_tmodule(self):
+        m = TModule()
+        top_m = top_module(m)
+        assert top_m is m.top_module
+
+    @pytest.mark.parametrize("mod", [Module, TModule])
+    def test_top_module_idempotent(self, mod: Callable[[], ModuleLike]):
+        m = mod()
+
+        top_m_1 = top_module(m)
+        top_m_2 = top_module(m)
+
+        assert top_m_1 is top_m_2
+        assert top_m_1 is not m
 
 
 class TestToSignal(TestCaseWithSimulator):
