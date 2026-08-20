@@ -103,21 +103,21 @@ class MethodMap:
             source: Body,
             ancestors: tuple[MBody, ...],
             call_path: tuple[CtrlPath, ...],
-            call_enable: Value,
+            call_enable: tuple[Value, ...],
         ):
             for method_obj, calls in source.method_calls.items():
                 method = MBody(method_obj._body)
                 for call_ctrl_path, arg_rec, enable_sig in calls:
                     new_ancestors = (method, *ancestors)
                     new_call_path = (*call_path, call_ctrl_path)
-                    new_call_enable = call_enable & enable_sig
+                    new_call_enable = (*call_enable, enable_sig)
 
                     self.info_by_call[(transaction, method)].append(
                         CallInfo(
                             ancestors=new_ancestors,
                             call_path=new_call_path,
                             arg=arg_rec,
-                            enable=new_call_enable,
+                            enable=Cat(new_call_enable).all(),
                         )
                     )
 
@@ -134,7 +134,7 @@ class MethodMap:
 
         for transaction in transactions:
             self.methods_by_transaction[TBody(transaction._body)] = []
-            rec(TBody(transaction._body), transaction._body, (), (), C(1))
+            rec(TBody(transaction._body), transaction._body, (), (), ())
 
         for transaction_or_method in self.methods_and_transactions:
             for method in transaction_or_method.method_calls.keys():
@@ -515,7 +515,7 @@ class TransactionManager(Elaboratable):
                 if method.nonexclusive:
                     return Cat(method._validate_arguments(call.enable, call.arg) for call in calls).all()
 
-                combined = one_hot_mux([(call.enable, call.arg) for call in calls])
+                combined = OneHotMux.create(m, [(call.enable, call.arg) for call in calls])
                 return method._validate_arguments(Cat(call.enable for call in calls).any(), combined)
 
             runnable_terms = [

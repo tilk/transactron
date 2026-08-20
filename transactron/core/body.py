@@ -11,7 +11,7 @@ from transactron.core.transaction_base import TransactionBase
 from amaranth import *
 from amaranth_types import ShapeLike, ValueLike, SrcLoc
 from typing import TYPE_CHECKING, ClassVar, NewType, NotRequired, Optional, Callable, TypedDict, Unpack, final
-from transactron.utils.amaranth_ext.functions import one_hot_mux
+from transactron.utils.amaranth_ext.elaboratables import OneHotMux
 from transactron.utils.assign import AssignArg
 from transactron.utils.transactron_helpers import from_method_layout, method_def_helper
 from transactron.utils.typing import MethodStruct
@@ -119,9 +119,7 @@ class Body(TransactionBase["Body"]):
     @staticmethod
     def _default_combiner(shape: ShapeLike):
         def impl(m: Module, args: Sequence[MethodStruct], runs: Value) -> AssignArg:
-            arg = Signal(shape)
-            m.d.comb += arg.eq(one_hot_mux([(runs[i], args[i]) for i in range(len(args))]))
-            return arg
+            return OneHotMux.create(m, [(runs[i], args[i]) for i in range(len(args))])
 
         return impl
 
