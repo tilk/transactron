@@ -103,21 +103,21 @@ class MethodMap:
             source: Body,
             ancestors: tuple[MBody, ...],
             call_path: tuple[CtrlPath, ...],
-            call_enable: tuple[Value, ...],
+            call_enable: Value,
         ):
             for method_obj, calls in source.method_calls.items():
                 method = MBody(method_obj._body)
                 for call_ctrl_path, arg_rec, enable_sig in calls:
                     new_ancestors = (method, *ancestors)
                     new_call_path = (*call_path, call_ctrl_path)
-                    new_call_enable = (*call_enable, enable_sig)
+                    new_call_enable = call_enable & enable_sig
 
                     self.info_by_call[(transaction, method)].append(
                         CallInfo(
                             ancestors=new_ancestors,
                             call_path=new_call_path,
                             arg=arg_rec,
-                            enable=Cat(new_call_enable).all(),
+                            enable=new_call_enable,
                         )
                     )
 
@@ -134,7 +134,7 @@ class MethodMap:
 
         for transaction in transactions:
             self.methods_by_transaction[TBody(transaction._body)] = []
-            rec(TBody(transaction._body), transaction._body, (), (), ())
+            rec(TBody(transaction._body), transaction._body, (), (), C(1))
 
         for transaction_or_method in self.methods_and_transactions:
             for method in transaction_or_method.method_calls.keys():
