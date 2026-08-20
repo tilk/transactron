@@ -452,7 +452,7 @@ def mask_before_first_set_bit(value: Value) -> Value:
     return ~mask_from_first_set_bit(value)
 
 
-def top_module(m: ModuleLike):
+def top_module(m: ModuleLike) -> Module:
     """Returns a top-level module, unaffected by condition contexts.
 
     Intended use: efficient combinational assignments which work with both
