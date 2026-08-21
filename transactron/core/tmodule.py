@@ -5,6 +5,7 @@ from amaranth_types import StatementLike, ModuleLike, ValueLike, SwitchKey
 from typing import Optional, Self, NoReturn
 from contextlib import contextmanager
 from amaranth.hdl._dsl import FSM, _guardedcontextmanager
+from transactron.utils.amaranth_ext import top_module
 
 __all__ = ["TModule"]
 
@@ -33,7 +34,7 @@ class _AvoidingModuleBuilderDomains:
         if name == "av_comb":
             return _AvoidingModuleBuilderDomain(self._m.avoiding_module.d["comb"])
         elif name == "top_comb":
-            return _AvoidingModuleBuilderDomain(self._m.top_module.d["comb"])
+            return _AvoidingModuleBuilderDomain(top_module(self._m).d["comb"])
         else:
             return _AvoidingModuleBuilderDomain(self._m.main_module.d[name])
 
