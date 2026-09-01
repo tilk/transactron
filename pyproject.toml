@@ -37,9 +37,7 @@ testing = [
 [dependency-groups]
 lint = [
     "pyright == 1.1.393",
-    "flake8 == 7.3.0",
-    "black == 24.4.2",
-    "pep8-naming == 0.13.3",
+    "ruff == 0.16.5",
     "pre-commit == 2.16.0",
 ]
 test = [
@@ -72,6 +70,16 @@ include = ["transactron", "test", "scripts"]
 reportMissingImports = true
 reportMissingTypeStubs = false
 reportWildcardImportFromLibrary = false
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "N"]
+ignore = ["F403", "F405"]
+
+[tool.ruff.lint.pep8-naming]
+ignore-names = ["OneHotCase", "OneHotSwitch", "OneHotSwitchDynamic"]
 
 [tool.pytest.ini_options]
 minversion = "7.2.2"

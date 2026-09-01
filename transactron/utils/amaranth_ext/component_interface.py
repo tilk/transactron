@@ -151,7 +151,7 @@ class ComponentInterface(AbstractComponentInterface):
                 res[m_name] = Flow.Out(m_val.signature)
             else:
                 raise AttributeError(
-                    f"Illegal attribute `{name_prefix+m_name}`: `{m_val}`.  "
+                    f"Illegal attribute `{name_prefix + m_name}`: `{m_val}`.  "
                     "Expected `CIn`, `COut`, `ComponentInterface` or `FlippedComponentInterface`"
                 )
         return res

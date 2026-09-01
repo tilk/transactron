@@ -167,9 +167,9 @@ def _uniformize_values(
 
 
 @overload
-def _uniformize_values[
-    T: ValueCastable
-](values: Iterable[T],) -> tuple[Callable[[Value], T], list[Value]]: ...
+def _uniformize_values[T: ValueCastable](
+    values: Iterable[T],
+) -> tuple[Callable[[Value], T], list[Value]]: ...
 
 
 @overload
@@ -246,9 +246,7 @@ def switch_value(
 
 
 @overload
-def switch_value[
-    T: ValueCastable
-](
+def switch_value[T: ValueCastable](
     test: ValueLike, cases: Iterable[tuple[SwitchKey | tuple[SwitchKey, ...] | None, T]], *, src_loc: int | SrcLoc = 0
 ) -> T: ...
 
@@ -300,9 +298,7 @@ def mux(sel: ValueLike, val1: ValueLike, val0: ValueLike) -> ValueLike:
 
 
 @overload
-def one_hot_mux[
-    T: ValueCastable
-](
+def one_hot_mux[T: ValueCastable](
     inputs: Sequence[tuple[ValueLike, T]],
     default: Optional[T] = None,
     priority: bool = False,
