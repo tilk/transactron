@@ -331,7 +331,8 @@ def generate_verilog(
 
     transaction_manager = DependencyContext.get().get_dependency(TransactionManagerKey())
     transaction_signals, method_signals = collect_transaction_method_signals(
-        transaction_manager, name_map  # type: ignore
+        transaction_manager,
+        name_map,  # type: ignore
     )
     profile_data, _ = ProfileData.make(transaction_manager)
     gen_info = GenerationInfo(

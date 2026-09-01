@@ -196,7 +196,6 @@ class HwMetric(ABC, MetricModel):
     @staticmethod
     def wrap_method(method: _T_Method) -> _T_Method:
         if not HwMetric.metrics_enabled():
-
             if isinstance(method, Method):
                 method.__class__ = DummyMethod
             else:

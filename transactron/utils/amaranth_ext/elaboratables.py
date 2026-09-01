@@ -669,9 +669,7 @@ class OneHotMux(Elaboratable):
 
     @overload
     @staticmethod
-    def create[
-        T: ValueCastable
-    ](
+    def create[T: ValueCastable](
         m: ModuleLike, inputs: Iterable[tuple[ValueLike, T]], default_input: Optional[T] = None, priority: bool = False
     ) -> T: ...
 

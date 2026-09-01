@@ -77,9 +77,9 @@ def longest_common_prefix[T](*seqs: Sequence[T]) -> Sequence[T]:
     return min(seqs, key=lambda s: len(s))
 
 
-def has_first_param[
-    T, U
-](func: Callable[..., T], name: str, tp: type[U]) -> TypeGuard[Callable[Concatenate[U, ...], T]]:
+def has_first_param[T, U](
+    func: Callable[..., T], name: str, tp: type[U]
+) -> TypeGuard[Callable[Concatenate[U, ...], T]]:
     parameters = signature(func).parameters
     return (
         len(parameters) >= 1
