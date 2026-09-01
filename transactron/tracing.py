@@ -93,9 +93,9 @@ class TracingFragment(Fragment):
 
         def __del__(self):
             if not hasattr(self, "_tracing_original"):
-                print("Missing tracing hook:")
+                print("Missing tracing hook:")  # noqa: T201
                 for line in self.created:
-                    print(line, end="")
+                    print(line, end="")  # noqa: T201
 
     @staticmethod
     def get(obj: HasElaborate, platform) -> "TracingFragment":

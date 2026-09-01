@@ -36,7 +36,7 @@ class DependencyKey[T, U](ABC):
         Different implementations of `combine` give different combining behavior
         for different kinds of keys.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abstractmethod
     def __hash__(self) -> int:
@@ -44,7 +44,7 @@ class DependencyKey[T, U](ABC):
         can be instanced. It is automatically overridden in frozen data
         classes.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     lock_on_get: bool = True
     cache: bool = True

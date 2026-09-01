@@ -310,7 +310,7 @@ class TestAsyncMemoryBank(TestCaseWithSimulator):
             ),
         )
 
-        data: list[int] = list(0 for i in range(max_addr))
+        data: list[int] = [0 for i in range(max_addr)]
 
         random.seed(seed)
 

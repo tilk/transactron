@@ -95,7 +95,7 @@ class LogRecord(LogRecordInfo):
     trigger: Value
     """Single bit Amaranth signal triggering the log."""
 
-    fields: tuple[Value, ...] = tuple()
+    fields: tuple[Value, ...] = ()
     """Amaranth signals that will be used to format the message."""
 
     def to_amaranth_format(self) -> Format:

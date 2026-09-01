@@ -75,11 +75,16 @@ reportWildcardImportFromLibrary = false
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "N"]
+select = ["E", "W", "F", "N", "YTT", "C4", "INP", "PIE", "T20", "Q", "RSE", "FLY", "PLE"]
 ignore = ["F403", "F405"]
 
 [tool.ruff.lint.pep8-naming]
 ignore-names = ["OneHotCase", "OneHotSwitch", "OneHotSwitchDynamic"]
+
+[tool.ruff.lint.per-file-ignores]
+"docs/**" = ["INP"]
+"transactron/cmd/**" = ["T20"]
+"transactron/core/manager.py" = ["T20"]
 
 [tool.pytest.ini_options]
 minversion = "7.2.2"
