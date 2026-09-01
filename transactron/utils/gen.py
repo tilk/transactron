@@ -245,7 +245,7 @@ class VerilogDebugWrapper(Elaboratable):
         def to_signal(val: Value | ValueCastable) -> Signal:
             val = Value.cast(val)
             if isinstance(val, Signal):
-                m.d.comb += v.eq(val[:0])  # force generation of `val` in verilog
+                m.d.comb += v.eq(val[:0])  # force generation of `val` in Verilog
                 return val
             else:
                 sig = Signal.like(val)

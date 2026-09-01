@@ -327,7 +327,7 @@ class HardwareLogger:
     ):
         """Log a message with severity 'ERROR'.
 
-        This severity level has special semantics. If a log with this serverity
+        This severity level has special semantics. If a log with this severity
         level is triggered, the simulation will be terminated.
 
         See `HardwareLogger.log` function for more details.

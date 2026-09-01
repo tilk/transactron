@@ -42,7 +42,7 @@ class MetricRegisterModel:
     Attributes
     ----------
     name: str
-        The unique identifier for the register (among remaning
+        The unique identifier for the register (among remaining
         registers of a specific metric).
     description: str
         A brief description of the metric's purpose.
@@ -96,7 +96,7 @@ class HwMetricRegister(MetricRegisterModel):
         Parameters
         ----------
         name: str
-            The unique identifier for the register (among remaning
+            The unique identifier for the register (among remaining
             registers of a specific metric).
         width: int
             The bit-width of the register.
@@ -838,7 +838,7 @@ class TaggedLatencyMeasurer(Elaboratable):
             m.d.comb += slots_taken_stop[k].eq(~(C(1, self.slots_number) << slot))
             self.log.error(m, ~(slots_taken & (1 << slot)).any(), "free slot {} freed again", slot)
             ret = self.slots.read[k](m, addr=slot)
-            # The result of substracting two unsigned n-bit is a signed (n+1)-bit value,
+            # The result of subtracting two unsigned n-bit is a signed (n+1)-bit value,
             # so we need to cast the result and discard the most significant bit.
             duration = (epoch - ret.data).as_unsigned()[:-1]
             self.histogram.add[k](m, duration)

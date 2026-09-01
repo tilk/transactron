@@ -79,7 +79,7 @@ class ListKey[T](DependencyKey[T, list[T]]):
     """Base class for list key.
 
     List keys are used when there is an one-to-many relation between keys
-    and dependecies. Provides list of dependencies.
+    and dependencies. Provides list of dependencies.
     """
 
     empty_valid = True
@@ -103,7 +103,7 @@ class DependencyManager:
         """Adds a new dependency to a key.
 
         Depending on the key type, a key can have a single dependency or
-        multple dependencies added to it.
+        multiple dependencies added to it.
         """
 
         if key in self.locked_dependencies:
