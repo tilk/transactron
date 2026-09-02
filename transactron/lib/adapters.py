@@ -8,9 +8,9 @@ from ..utils import SrcLoc, get_src_loc, MethodStruct, MethodLayout, ValueBundle
 from ..core import *
 
 __all__ = [
+    "Adapter",
     "AdapterBase",
     "AdapterTrans",
-    "Adapter",
 ]
 
 

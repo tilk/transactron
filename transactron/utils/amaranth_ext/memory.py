@@ -14,7 +14,7 @@ from .. import get_src_loc
 from amaranth_types.types import ShapeLike, ValueLike
 import amaranth_types.memory as amemory
 
-__all__ = ["MultiReadMemory", "MultiportXORMemory", "MultiportXORILVTMemory", "MultiportOneHotILVTMemory"]
+__all__ = ["MultiReadMemory", "MultiportOneHotILVTMemory", "MultiportXORILVTMemory", "MultiportXORMemory"]
 
 
 @final

@@ -7,18 +7,18 @@ from .functions import shape_of, const_of
 
 
 __all__ = [
-    "generic_shift_right",
     "generic_shift_left",
-    "shift_right",
-    "shift_left",
-    "rotate_right",
-    "rotate_left",
-    "generic_shift_vec_right",
+    "generic_shift_right",
     "generic_shift_vec_left",
-    "shift_vec_right",
-    "shift_vec_left",
-    "rotate_vec_right",
+    "generic_shift_vec_right",
+    "rotate_left",
+    "rotate_right",
     "rotate_vec_left",
+    "rotate_vec_right",
+    "shift_left",
+    "shift_right",
+    "shift_vec_left",
+    "shift_vec_right",
 ]
 
 

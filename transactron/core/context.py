@@ -10,7 +10,7 @@ from .keys import TransactionManagerKey
 from transactron.utils import DependencyContext, DependencyManager, silence_mustuse
 
 
-__all__ = ["TransactronContextElaboratable", "TransactronContextComponent"]
+__all__ = ["TransactronContextComponent", "TransactronContextElaboratable"]
 
 
 class TransactronContextElaboratable(Elaboratable):

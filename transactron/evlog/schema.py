@@ -10,12 +10,12 @@ from .emit import EmittedEvent
 
 
 __all__ = [
-    "SignalHandle",
-    "EventFieldSchema",
-    "EventSiteSchema",
     "EvLogSchema",
+    "EventFieldSchema",
     "EventSiteLocation",
+    "EventSiteSchema",
     "GeneratedEvLog",
+    "SignalHandle",
     "schema_from_records",
 ]
 

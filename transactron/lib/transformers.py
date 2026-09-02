@@ -17,14 +17,14 @@ from .connectors import Forwarder, CrossbarConnectTrans
 from .simultaneous import condition
 
 __all__ = [
-    "Transformer",
-    "Unifier",
-    "MethodMap",
+    "Collector",
     "MethodFilter",
+    "MethodMap",
     "MethodProduct",
     "MethodTryProduct",
-    "Collector",
     "NonexclusiveWrapper",
+    "Transformer",
+    "Unifier",
 ]
 
 

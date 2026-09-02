@@ -15,17 +15,17 @@ from transactron.utils.amaranth_ext.functions import and_value, max_value, min_v
 from transactron.utils.dependencies import ListKey, DependencyContext, SimpleKey
 
 __all__ = [
-    "MetricRegisterModel",
-    "MetricModel",
-    "HwMetric",
-    "HwCounter",
-    "TaggedCounter",
-    "HwExpHistogram",
-    "WideFIFOLatencyMeasurer",
     "FIFOLatencyMeasurer",
-    "TaggedLatencyMeasurer",
     "HardwareMetricsManager",
+    "HwCounter",
+    "HwExpHistogram",
+    "HwMetric",
     "HwMetricsEnabledKey",
+    "MetricModel",
+    "MetricRegisterModel",
+    "TaggedCounter",
+    "TaggedLatencyMeasurer",
+    "WideFIFOLatencyMeasurer",
 ]
 
 

@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 
 
 __all__ = [
-    "MetricLocation",
     "GeneratedLog",
     "GenerationInfo",
+    "MetricLocation",
     "generate_verilog",
 ]
 

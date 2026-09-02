@@ -11,7 +11,7 @@ from ..utils import SrcLoc, get_src_loc, MultiPriorityEncoder
 from typing import Optional
 from transactron.utils import LayoutList, MethodLayout
 
-__all__ = ["MemoryBank", "ContentAddressableMemory", "AsyncMemoryBank"]
+__all__ = ["AsyncMemoryBank", "ContentAddressableMemory", "MemoryBank"]
 
 
 class MemoryBank(Elaboratable):

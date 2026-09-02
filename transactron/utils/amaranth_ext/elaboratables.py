@@ -10,15 +10,15 @@ from amaranth_types import FlatValueLike, HasElaborate, ShapeLike, ModuleLike, V
 from transactron.utils.amaranth_ext.functions import one_hot_mux, shape_of, top_module
 
 __all__ = [
-    "OneHotSwitchDynamic",
-    "OneHotSwitch",
     "ModuleConnector",
-    "OneHotRoundRobin",
-    "RoundRobin",
     "MultiPriorityEncoder",
-    "RingMultiPriorityEncoder",
-    "StableSelectingNetwork",
     "OneHotMux",
+    "OneHotRoundRobin",
+    "OneHotSwitch",
+    "OneHotSwitchDynamic",
+    "RingMultiPriorityEncoder",
+    "RoundRobin",
+    "StableSelectingNetwork",
 ]
 
 

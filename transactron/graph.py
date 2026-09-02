@@ -30,7 +30,7 @@ class Direction(IntFlag):
 
 
 class OwnershipGraph:
-    mermaid_direction = ["---", "-->", "<--", "<-->"]
+    mermaid_direction = ("---", "-->", "<--", "<-->")
 
     def __init__(self, root):
         self.class_counters: defaultdict[type, int] = defaultdict(int)

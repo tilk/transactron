@@ -13,7 +13,7 @@ from transactron.utils.amaranth_ext.shifter import rotate_left
 from transactron.utils.transactron_helpers import from_method_layout, get_src_loc
 
 
-__all__ = ["BasicFifo", "WideFifo", "Semaphore"]
+__all__ = ["BasicFifo", "Semaphore", "WideFifo"]
 
 
 class BasicFifo(Elaboratable):

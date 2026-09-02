@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Mapping, Self, final, overload
 from dataclasses import dataclass
 
 __all__ = [
+    "AbstractComponentInterface",
     "CIn",
     "COut",
-    "AbstractComponentInterface",
     "ComponentInterface",
     "FlippedComponentInterface",
 ]

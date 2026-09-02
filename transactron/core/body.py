@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from .method import Method
 
 
-__all__ = ["AdapterBodyParams", "BodyParams", "Body", "TBody", "MBody"]
+__all__ = ["AdapterBodyParams", "Body", "BodyParams", "MBody", "TBody"]
 
 
 class AdapterBodyParams(TypedDict):

@@ -8,13 +8,13 @@ from .schema import EvLogSchema, EventSiteSchema
 
 
 __all__ = [
-    "RawEvent",
     "DecodedEvent",
-    "RawEventSink",
     "EventDecoder",
     "EventLog",
-    "EventLogWriter",
     "EventLogReader",
+    "EventLogWriter",
+    "RawEvent",
+    "RawEventSink",
 ]
 
 

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from .transaction import Transaction  # noqa: F401
 
 
-__all__ = ["MethodDir", "Provided", "Required", "Method", "Methods"]
+__all__ = ["Method", "MethodDir", "Methods", "Provided", "Required"]
 
 
 class MethodDir(enum.Enum):

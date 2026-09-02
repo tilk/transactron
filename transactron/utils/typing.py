@@ -14,19 +14,19 @@ from amaranth.lib.data import StructLayout, View
 from amaranth_types import ShapeLike, ValueLike
 
 __all__ = [
-    "MethodLayout",
-    "MethodStruct",
-    "ValueBundle",
-    "LayoutListField",
-    "LayoutList",
-    "LayoutIterable",
-    "NameIntDict",
-    "NameValueDict",
-    "ReturnDict",
-    "ROGraph",
     "Graph",
     "GraphCC",
     "HasDebugSignals",
+    "LayoutIterable",
+    "LayoutList",
+    "LayoutListField",
+    "MethodLayout",
+    "MethodStruct",
+    "NameIntDict",
+    "NameValueDict",
+    "ROGraph",
+    "ReturnDict",
+    "ValueBundle",
 ]
 
 # Internal Transactron types
