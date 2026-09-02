@@ -65,7 +65,7 @@ def mod_add(sig: ValueLike, mod: int, incr: ValueLike, max_incr: int):
     incr = Value.cast(incr)
     if not (mod & (mod - 1)):
         return (sig + incr) & (mod - 1)
-    return SwitchValue(sig + incr, [(mod + i, i) for i in range(0, max_incr)] + [(None, sig + incr)])
+    return SwitchValue(sig + incr, [(mod + i, i) for i in range(max_incr)] + [(None, sig + incr)])
 
 
 def popcount(s: Value):

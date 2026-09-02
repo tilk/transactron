@@ -86,7 +86,6 @@ class TestMux(TestCaseWithSimulator):
                 ctx.set(sel, sel_val)
                 ctx.set(in1, in1_val)
                 out_val = ctx.get(out)
-                print(sel_val, in1_val, out_val)
                 assert out_val == (in1_val if sel_val else 5)
 
         with self.run_simulation(m) as sim:

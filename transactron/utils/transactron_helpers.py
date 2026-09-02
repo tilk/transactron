@@ -95,9 +95,9 @@ def def_helper[T, U](description, func: Callable[..., T], tp: type[U], arg: U, /
     except ValueError:
         raise TypeError(f"Invalid python method signature for {func} (missing `self` for class-level mock?)")
 
-    kw_parameters = set(
+    kw_parameters = {
         n for n, p in parameters.items() if p.kind in {Parameter.POSITIONAL_OR_KEYWORD, Parameter.KEYWORD_ONLY}
-    )
+    }
     if len(parameters) == 1 and has_first_param(func, "arg", tp):
         return func(arg)
     elif kw_parameters <= kwargs.keys():

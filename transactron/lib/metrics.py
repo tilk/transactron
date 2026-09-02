@@ -114,8 +114,6 @@ class HwMetricRegister(MetricRegisterModel):
 class HwMetricsListKey(ListKey["HwMetric"]):
     """DependencyManager key collecting hardware metrics globally as a list."""
 
-    pass
-
 
 @dataclass(frozen=True)
 class HwMetricsEnabledKey(SimpleKey[bool]):
@@ -358,7 +356,7 @@ class TaggedCounter(Elaboratable, HwMetric):
         @def_methods(m, self.incr)
         def _(k: int, tag):
             if self.one_hot:
-                sorted_tags = sorted(list(self.counters.keys()))
+                sorted_tags = sorted(self.counters.keys())
                 for i in OneHotSwitchDynamic(m, Value.cast(tag)):
                     m.d.comb += runs[sorted_tags[i]][k].eq(1)
             else:
@@ -485,8 +483,8 @@ class HwExpHistogram(Elaboratable, HwMetric):
         def sample_or_default(method: Method, default: Value) -> Value:
             return Mux(method.run, method.data_in.sample, default)
 
-        method_min_samples = list(sample_or_default(m, C((1 << self.sample_width)) - 1) for m in self.add)
-        method_max_samples = list(sample_or_default(m, C(0)) for m in self.add)
+        method_min_samples = [sample_or_default(m, C((1 << self.sample_width)) - 1) for m in self.add]
+        method_max_samples = [sample_or_default(m, C(0)) for m in self.add]
 
         min_sample = min_value(self.min.value, method_min_samples)
         max_sample = max_value(self.max.value, method_max_samples)
@@ -785,8 +783,8 @@ class TaggedLatencyMeasurer(Elaboratable):
         self.slots_number = slots_number
         self.max_latency = max_latency
 
-        self.start = HwMetric.wrap_method(Methods(ways, i=[("slot", range(0, slots_number))]))
-        self.stop = HwMetric.wrap_method(Methods(ways, i=[("slot", range(0, slots_number))]))
+        self.start = HwMetric.wrap_method(Methods(ways, i=[("slot", range(slots_number))]))
+        self.stop = HwMetric.wrap_method(Methods(ways, i=[("slot", range(slots_number))]))
 
         # This bucket count gives us the best possible granularity.
         bucket_count = bits_for(self.max_latency) + 1

@@ -75,11 +75,33 @@ reportWildcardImportFromLibrary = false
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "N"]
-ignore = ["F403", "F405"]
+select = [
+    "E",    # pycodestyle error
+    "W",    # pycodestyle warning
+    "F",    # pyflakes
+    "N",    # pep8-naming
+    "YTT",  # flake8-2020 (sys.version)
+    "C4",   # flake8-comprehensions
+    "INP",  # flake8-no-pep420 (all packages must have __init__.py)
+    "PIE",  # flake8-pie (various code redundancy tests)
+    "T20",  # flake8-print (don't use print)
+    "Q",    # flake8-quotes
+    "RSE",  # flake8-raise
+    "FLY",  # flynt (don't use old style formatting)
+    "PLE"   # pylint error
+]
+ignore = [
+    "F403", # star imports
+    "F405"  # use of name from star imports
+]
 
 [tool.ruff.lint.pep8-naming]
 ignore-names = ["OneHotCase", "OneHotSwitch", "OneHotSwitchDynamic"]
+
+[tool.ruff.lint.per-file-ignores]
+"docs/**" = ["INP"]
+"transactron/cmd/**" = ["T20"]
+"transactron/core/manager.py" = ["T20"]
 
 [tool.pytest.ini_options]
 minversion = "7.2.2"

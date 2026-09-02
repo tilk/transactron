@@ -219,7 +219,7 @@ class SignalLogRecord(logging.LogRecordInfo):
     trigger: Signal
     """Amaranth signal triggering the log."""
 
-    fields: tuple[Signal, ...] = tuple()
+    fields: tuple[Signal, ...] = ()
     """Amaranth signals that will be used to format the message."""
 
 
