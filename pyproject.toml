@@ -90,6 +90,7 @@ select = [
     "FLY",  # flynt (don't use old style formatting)
     "PLE",  # pylint error
     "RUF",  # ruff-specific rules
+    "UP",   # pyupgrade
 ]
 ignore = [
     "F403",   # star imports
@@ -97,6 +98,7 @@ ignore = [
     "RUF005", # does not like list concatenation for some reason
     "RUF021", # requires redundant parentheses around and expressions
     "RUF100", # unused noqa, seems nice but does spurious reports
+    "UP037",  # remove quotes from type annotation (TODO py3.14)
 ]
 
 [tool.ruff.lint.pep8-naming]

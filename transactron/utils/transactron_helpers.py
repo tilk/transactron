@@ -1,7 +1,7 @@
 import os
 import sys
 from contextlib import contextmanager
-from typing import Optional, Any, Concatenate, TypeGuard
+from typing import Any, Concatenate, TypeGuard
 from collections.abc import Callable, Mapping, Sequence
 from .typing import ROGraph, GraphCC, MethodLayout, MethodStruct, LayoutList, LayoutListField
 from amaranth_types import SrcLoc, ShapeLike
@@ -122,7 +122,7 @@ def method_def_helper[T](method, func: Callable[..., T], arg: MethodStruct) -> T
     return def_helper(f"method definition for {method}", func, MethodStruct, arg, **kwargs)  # type: ignore
 
 
-def get_caller_class_name(default: Optional[str] = None) -> tuple[Optional[Elaboratable], str]:
+def get_caller_class_name(default: str | None = None) -> tuple[Elaboratable | None, str]:
     try:
         for d in count(2):
             caller_frame = sys._getframe(d)

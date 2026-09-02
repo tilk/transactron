@@ -1,4 +1,3 @@
-from typing import Optional
 from amaranth import *
 import amaranth.lib.memory as memory
 import amaranth.lib.data as data
@@ -189,7 +188,7 @@ class WideFifo(Elaboratable):
         shape: ShapeLike,
         depth: int,
         read_width: int,
-        write_width: Optional[int] = None,
+        write_width: int | None = None,
         *,
         write_max_count: bool = False,
         src_loc: int | SrcLoc = 0,

@@ -3,7 +3,8 @@ from amaranth.lib.wiring import Signature, Flow, Member
 from amaranth_types import AbstractInterface, AbstractSignature, FlatShapeLike
 
 from abc import ABCMeta
-from typing import TYPE_CHECKING, Mapping, Self, final, overload
+from typing import TYPE_CHECKING, Self, final, overload
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 __all__ = [

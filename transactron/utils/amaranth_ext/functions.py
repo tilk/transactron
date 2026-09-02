@@ -1,4 +1,4 @@
-from typing import Any, Optional, overload
+from typing import Any, overload
 from amaranth import *
 from amaranth.hdl import ShapeCastable, ValueCastable
 from amaranth.hdl._ast import SwitchValue
@@ -300,7 +300,7 @@ def mux(sel: ValueLike, val1: ValueLike, val0: ValueLike) -> ValueLike:
 @overload
 def one_hot_mux[T: ValueCastable](
     inputs: Sequence[tuple[ValueLike, T]],
-    default: Optional[T] = None,
+    default: T | None = None,
     priority: bool = False,
     assert_one_hot: bool = True,
 ) -> T: ...
@@ -309,7 +309,7 @@ def one_hot_mux[T: ValueCastable](
 @overload
 def one_hot_mux(
     inputs: Sequence[tuple[ValueLike, FlatValueLike]],
-    default: Optional[FlatValueLike] = None,
+    default: FlatValueLike | None = None,
     priority: bool = False,
     assert_one_hot: bool = True,
 ) -> Value: ...
@@ -318,7 +318,7 @@ def one_hot_mux(
 @overload
 def one_hot_mux(
     inputs: Sequence[tuple[ValueLike, ValueLike]],
-    default: Optional[ValueLike] = None,
+    default: ValueLike | None = None,
     priority: bool = False,
     assert_one_hot: bool = True,
 ) -> Value | ValueCastable: ...
@@ -326,7 +326,7 @@ def one_hot_mux(
 
 def one_hot_mux(
     inputs: Sequence[tuple[ValueLike, ValueLike]],
-    default: Optional[ValueLike] = None,
+    default: ValueLike | None = None,
     priority: bool = False,
     assert_one_hot: bool = False,
 ) -> Value | ValueCastable:

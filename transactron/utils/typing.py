@@ -1,13 +1,12 @@
 from typing import (
-    Callable,
     Concatenate,
     Protocol,
     TypeAlias,
     cast,
     runtime_checkable,
-    Union,
     Any,
 )
+from collections.abc import Callable
 from collections.abc import Iterable, Mapping
 from amaranth import *
 from amaranth.lib.data import StructLayout, View
@@ -37,8 +36,8 @@ type LayoutIterable = Iterable["LayoutListField"]
 type MethodLayout = StructLayout | LayoutIterable
 MethodStruct: TypeAlias = "View[StructLayout]"  # defined as TypeAlias because of def_method logic
 
-type NameIntDict = Mapping[str, Union[int, "NameIntDict"]]
-type NameValueDict = Mapping[str, Union[ValueLike, "NameValueDict"]]
+type NameIntDict = Mapping[str, "int | NameIntDict"]
+type NameValueDict = Mapping[str, ValueLike | "NameValueDict"]
 type ReturnDict = ValueLike | NameValueDict
 
 type ROGraph[T] = Mapping[T, Iterable[T]]

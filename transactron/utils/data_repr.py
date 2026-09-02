@@ -1,6 +1,7 @@
 from collections.abc import Iterable, Mapping
 from amaranth_types import ShapeLike
-from typing import Any, Hashable, Sized
+from typing import Any
+from collections.abc import Hashable, Sized
 from statistics import fmean
 from amaranth.lib.data import StructLayout
 
@@ -144,4 +145,4 @@ def signed_to_int(x: int, xlen: int) -> int:
 
 
 def average_dict_of_lists(d: Mapping[Any, Sized]) -> float:
-    return fmean((len(xs) for xs in d.values()))
+    return fmean(len(xs) for xs in d.values())

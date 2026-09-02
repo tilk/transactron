@@ -1,4 +1,3 @@
-from typing import Optional
 from amaranth import *
 from amaranth.lib.wiring import Component, connect, flipped
 
@@ -26,8 +25,8 @@ class TransactronContextElaboratable(Elaboratable):
     def __init__(
         self,
         elaboratable: HasElaborate,
-        dependency_manager: Optional[DependencyManager] = None,
-        transaction_manager: Optional[TransactionManager] = None,
+        dependency_manager: DependencyManager | None = None,
+        transaction_manager: TransactionManager | None = None,
     ):
         """
         Parameters
@@ -83,8 +82,8 @@ class TransactronContextComponent(TransactronContextElaboratable, Component):
     def __init__(
         self,
         component: AbstractComponent,
-        dependency_manager: Optional[DependencyManager] = None,
-        transaction_manager: Optional[TransactionManager] = None,
+        dependency_manager: DependencyManager | None = None,
+        transaction_manager: TransactionManager | None = None,
     ):
         """
         Parameters

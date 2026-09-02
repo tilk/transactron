@@ -1,5 +1,6 @@
 from collections.abc import Iterable
-from typing import Any, Callable, ClassVar
+from typing import Any, ClassVar
+from collections.abc import Callable
 
 from .event import Event
 from .log import DecodedEvent

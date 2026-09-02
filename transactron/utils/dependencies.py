@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 from abc import abstractmethod, ABC
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar
 
 
 __all__ = ["DependencyContext", "DependencyKey", "DependencyManager", "ListKey", "SimpleKey"]
@@ -126,7 +126,7 @@ class DependencyManager:
 
         return ret
 
-    def get_optional_dependency[U](self, key: DependencyKey[Any, U]) -> Optional[U]:
+    def get_optional_dependency[U](self, key: DependencyKey[Any, U]) -> U | None:
         """Gets the dependency for a key, if it exists.
 
         If the dependency is gettable, the return value is the same as in
