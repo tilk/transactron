@@ -136,7 +136,7 @@ class TestTransactionConflict(TestCaseWithSimulator):
         ],
     )
     def test_calls(self, name, scheduler: TransactionScheduler, prob1, prob2, probout):
-        self.in1_stream = range(0, 100)
+        self.in1_stream = range(100)
         self.in2_stream = range(100, 200)
         self.out_stream = range(200, 400)
         self.in_expected = deque()
@@ -650,3 +650,55 @@ class TestTransactionOutsideElaborate(TestCaseWithSimulator):
 
         with self.run_simulation(m):
             pass
+
+
+class AlwaysCicruit(Elaboratable):
+    def __init__(self):
+        self.trans_ready = Signal()
+        self.ready = Signal()
+        self.ok = Signal()
+
+    def elaborate(self, platform):
+        m = TModule()
+
+        method = Method()
+
+        @def_method(m, method, ready=self.ready)
+        def _():
+            pass
+
+        with Transaction().always_body(m, ready=self.trans_ready):
+            method(m)
+            m.d.comb += self.ok.eq(1)
+
+        return m
+
+
+class TestAlways(TestCaseWithSimulator):
+    def test_always_call_ok(self):
+        m = AlwaysCicruit()
+        dut = SimpleTestCircuit(m)
+
+        async def process(sim):
+            for ready, t_ready in [(1, 1), (1, 0), (0, 0)]:
+                sim.set(m.ready, ready)
+                sim.set(m.trans_ready, t_ready)
+
+                await sim.tick()
+                assert bool(sim.get(m.ok)) == (ready and t_ready)
+
+        with self.run_simulation(dut) as sim:
+            sim.add_testbench(process)
+
+    def test_always_call_fail(self):
+        m = AlwaysCicruit()
+        dut = SimpleTestCircuit(m)
+
+        async def process(sim):
+            sim.set(m.ready, 0)
+            sim.set(m.trans_ready, 1)
+            await sim.tick()
+
+        with pytest.raises(AssertionError):
+            with self.run_simulation(dut) as sim:
+                sim.add_testbench(process)

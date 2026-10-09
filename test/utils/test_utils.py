@@ -11,8 +11,15 @@ from transactron.utils import (
     count_leading_zeros,
     count_trailing_zeros,
     cyclic_mask,
+    extract_lowest_set_bit,
+    clear_lowest_set_bit,
+    mask_after_first_set_bit,
+    mask_from_first_set_bit,
+    mask_until_first_set_bit,
+    mask_before_first_set_bit,
 )
-from amaranth.utils import ceil_log2
+from hypothesis import given
+import hypothesis.strategies as st
 
 
 class TestAlignToPowerOfTwo(unittest.TestCase):
@@ -53,145 +60,6 @@ class TestAlignToPowerOfTwo(unittest.TestCase):
         for num, power, expected in test_cases:
             out = align_down_to_power_of_two(num, power)
             assert expected == out
-
-
-class PopcountTestCircuit(Elaboratable):
-    def __init__(self, size: int):
-        self.sig_in = Signal(size)
-        self.sig_out = Signal(size)
-
-    def elaborate(self, platform):
-        m = Module()
-
-        m.d.comb += self.sig_out.eq(popcount(self.sig_in))
-
-        return m
-
-
-@pytest.mark.parametrize("size", [2, 3, 4, 5, 6, 8, 10, 16, 21, 32, 33, 64, 1025])
-class TestPopcount(TestCaseWithSimulator):
-    @pytest.fixture(scope="function", autouse=True)
-    def setup_fixture(self, size):
-        self.size = size
-        random.seed(14)
-        self.test_number = 40
-        self.m = PopcountTestCircuit(self.size)
-
-    def check(self, sim: TestbenchContext, n):
-        sim.set(self.m.sig_in, n)
-        out_popcount = sim.get(self.m.sig_out)
-        assert out_popcount == n.bit_count(), f"{n:x}"
-
-    async def process(self, sim: TestbenchContext):
-        for i in range(self.test_number):
-            n = random.randrange(2**self.size)
-            self.check(sim, n)
-            sim.delay(1e-6)
-        self.check(sim, 2**self.size - 1)
-
-    def test_popcount(self, size):
-        with self.run_simulation(self.m) as sim:
-            sim.add_testbench(self.process)
-
-
-class CLZTestCircuit(Elaboratable):
-    def __init__(self, xlen: int):
-        self.sig_in = Signal(xlen)
-        self.sig_out = Signal(ceil_log2(xlen) + 1)
-        self.xlen = xlen
-
-    def elaborate(self, platform):
-        m = Module()
-
-        m.d.comb += self.sig_out.eq(count_leading_zeros(self.sig_in))
-        # dummy signal
-        s = Signal()
-        m.d.sync += s.eq(1)
-
-        return m
-
-
-@pytest.mark.parametrize("size", [1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 97, 98, 127, 128])
-class TestCountLeadingZeros(TestCaseWithSimulator):
-    @pytest.fixture(scope="function", autouse=True)
-    def setup_fixture(self, size):
-        self.size = size
-        random.seed(14)
-        self.test_number = 40
-        self.m = CLZTestCircuit(self.size)
-
-    def check(self, sim: TestbenchContext, n):
-        sim.set(self.m.sig_in, n)
-        out_clz = sim.get(self.m.sig_out)
-        expected = (self.size) - n.bit_length()
-        assert out_clz == expected, f"Incorrect result: got {out_clz}\t expected: {expected}"
-
-    async def process(self, sim: TestbenchContext):
-        for i in range(self.test_number):
-            n = random.randrange(self.size)
-            self.check(sim, n)
-            sim.delay(1e-6)
-        self.check(sim, 2**self.size - 1)
-        await sim.delay(1e-6)
-        self.check(sim, 0)
-
-    def test_count_leading_zeros(self, size):
-        with self.run_simulation(self.m) as sim:
-            sim.add_testbench(self.process)
-
-
-class CTZTestCircuit(Elaboratable):
-    def __init__(self, xlen: int):
-        self.sig_in = Signal(xlen)
-        self.sig_out = Signal(ceil_log2(xlen) + 1)
-        self.xlen = xlen
-
-    def elaborate(self, platform):
-        m = Module()
-
-        m.d.comb += self.sig_out.eq(count_trailing_zeros(self.sig_in))
-        # dummy signal
-        s = Signal()
-        m.d.sync += s.eq(1)
-
-        return m
-
-
-@pytest.mark.parametrize("size", [1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 97, 98, 127, 128])
-class TestCountTrailingZeros(TestCaseWithSimulator):
-    @pytest.fixture(scope="function", autouse=True)
-    def setup_fixture(self, size):
-        self.size = size
-        random.seed(14)
-        self.test_number = 40
-        self.m = CTZTestCircuit(self.size)
-
-    def check(self, sim: TestbenchContext, n):
-        sim.set(self.m.sig_in, n)
-        out_ctz = sim.get(self.m.sig_out)
-
-        expected = 0
-        if n == 0:
-            expected = self.size
-        else:
-            while (n & 1) == 0:
-                expected += 1
-                n >>= 1
-
-        assert out_ctz == expected, f"{n:x}"
-
-    async def process(self, sim: TestbenchContext):
-        for i in range(self.test_number):
-            n = random.randrange(self.size)
-            self.check(sim, n)
-            await sim.delay(1e-6)
-        self.check(sim, self.size - 1)
-        await sim.delay(1e-6)
-        self.check(sim, 0)
-
-    def test_count_trailing_zeros(self, size):
-        with self.run_simulation(self.m) as sim:
-            sim.add_testbench(self.process)
 
 
 class GenCyclicMaskTestCircuit(Elaboratable):
@@ -245,3 +113,106 @@ class TestGenCyclicMask(TestCaseWithSimulator):
     def test_count_trailing_zeros(self, size):
         with self.run_simulation(self.m) as sim:
             sim.add_testbench(self.process)
+
+
+def reference_popcount(n, width):
+    return n.bit_count()
+
+
+def reference_clz(n, width):
+    return width - n.bit_length()
+
+
+def reference_ctz(n, width):
+    if n == 0:
+        return width
+    return bin(n)[::-1].find("1")
+
+
+def reference_extract_lowest_set_bit(n, width):
+    if n == 0:
+        return 0
+    ctz = bin(n)[::-1].find("1")
+    return 1 << ctz
+
+
+def reference_clear_lowest_set_bit(n, width):
+    return n & ~reference_extract_lowest_set_bit(n, width)
+
+
+def reference_mask_after_first_set_bit(n, width):
+    if n == 0:
+        return 0
+    ctz = bin(n)[::-1].find("1")
+    return (-1 << (ctz + 1)) & ((1 << width) - 1)
+
+
+def reference_mask_from_first_set_bit(n, width):
+    if n == 0:
+        return 0
+    ctz = bin(n)[::-1].find("1")
+    return (-1 << ctz) & ((1 << width) - 1)
+
+
+def reference_mask_until_first_set_bit(n, width):
+    if n == 0:
+        return (1 << width) - 1
+    ctz = bin(n)[::-1].find("1")
+    return (1 << (ctz + 1)) - 1
+
+
+def reference_mask_before_first_set_bit(n, width):
+    if n == 0:
+        return (1 << width) - 1
+    ctz = bin(n)[::-1].find("1")
+    return (1 << ctz) - 1
+
+
+class TestBitManipulationFunctions(TestCaseWithSimulator):
+    def do_test(self, function, ref_function, data):
+        # TODO: remove simulator when https://codeberg.org/amaranth-lang/rfcs/pulls/88 gets approved and implemented
+        async def process(sim: TestbenchContext):
+            width = data.draw(st.integers(min_value=0, max_value=256))
+            value = data.draw(st.integers(min_value=0, max_value=(1 << width) - 1))
+            result = sim.get(function(Const(value, width)))
+            expected = ref_function(value, width)
+            assert result == expected, f"Failed for value {value} with width {width}"
+
+        with self.run_simulation(Module()) as sim:
+            sim.add_testbench(process)
+
+    @given(st.data())
+    def test_popcount(self, data):
+        self.do_test(popcount, reference_popcount, data)
+
+    @given(st.data())
+    def test_count_leading_zeros(self, data):
+        self.do_test(count_leading_zeros, reference_clz, data)
+
+    @given(st.data())
+    def test_count_trailing_zeros(self, data):
+        self.do_test(count_trailing_zeros, reference_ctz, data)
+
+    @given(st.data())
+    def test_extract_lowest_set_bit(self, data):
+        self.do_test(extract_lowest_set_bit, reference_extract_lowest_set_bit, data)
+
+    @given(st.data())
+    def test_clear_lowest_set_bit(self, data):
+        self.do_test(clear_lowest_set_bit, reference_clear_lowest_set_bit, data)
+
+    @given(st.data())
+    def test_mask_after_first_set_bit(self, data):
+        self.do_test(mask_after_first_set_bit, reference_mask_after_first_set_bit, data)
+
+    @given(st.data())
+    def test_mask_from_first_set_bit(self, data):
+        self.do_test(mask_from_first_set_bit, reference_mask_from_first_set_bit, data)
+
+    @given(st.data())
+    def test_mask_until_first_set_bit(self, data):
+        self.do_test(mask_until_first_set_bit, reference_mask_until_first_set_bit, data)
+
+    @given(st.data())
+    def test_mask_before_first_set_bit(self, data):
+        self.do_test(mask_before_first_set_bit, reference_mask_before_first_set_bit, data)

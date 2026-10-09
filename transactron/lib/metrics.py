@@ -1,16 +1,16 @@
 from dataclasses import dataclass, field
 from amaranth.lib.data import ArrayLayout, StructLayout
 from dataclasses_json import dataclass_json
-from typing import Optional, Type, TypeVar
+from typing import Optional, TypeVar
 from abc import ABC
 from enum import Enum
 
 from amaranth import *
 from amaranth.utils import bits_for, ceil_log2, exact_log2
 
-from transactron.utils import OneHotSwitchDynamic, ValueBundle
+from transactron.utils import OneHotSwitchDynamic, ValueBundle, logging
 from transactron import Method, Methods, def_methods, TModule
-from transactron.lib import WideFifo, AsyncMemoryBank, logging
+from transactron.lib import WideFifo, AsyncMemoryBank
 from transactron.utils.amaranth_ext.functions import and_value, max_value, min_value, or_value, sum_value, popcount
 from transactron.utils.dependencies import ListKey, DependencyContext, SimpleKey
 
@@ -42,7 +42,7 @@ class MetricRegisterModel:
     Attributes
     ----------
     name: str
-        The unique identifier for the register (among remaning
+        The unique identifier for the register (among remaining
         registers of a specific metric).
     description: str
         A brief description of the metric's purpose.
@@ -96,7 +96,7 @@ class HwMetricRegister(MetricRegisterModel):
         Parameters
         ----------
         name: str
-            The unique identifier for the register (among remaning
+            The unique identifier for the register (among remaining
             registers of a specific metric).
         width: int
             The bit-width of the register.
@@ -113,8 +113,6 @@ class HwMetricRegister(MetricRegisterModel):
 @dataclass(frozen=True)
 class HwMetricsListKey(ListKey["HwMetric"]):
     """DependencyManager key collecting hardware metrics globally as a list."""
-
-    pass
 
 
 @dataclass(frozen=True)
@@ -165,11 +163,12 @@ class HwMetric(ABC, MetricModel):
 
         self.signals: dict[str, Signal] = {}
 
-        # add the metric to the global list of all metrics
-        DependencyContext.get().add_dependency(HwMetricsListKey(), self)
-
-        # So Amaranth doesn't report that the module is unused when metrics are disabled
-        self._MustUse__silence = True  # type: ignore
+        if HwMetric.metrics_enabled():
+            # add the metric to the global list of all metrics
+            DependencyContext.get().add_dependency(HwMetricsListKey(), self)
+        else:
+            # So Amaranth doesn't report that the module is unused when metrics are disabled
+            self._MustUse__silence = True  # type: ignore
 
     def add_registers(self, regs: list[HwMetricRegister]):
         """
@@ -195,7 +194,6 @@ class HwMetric(ABC, MetricModel):
     @staticmethod
     def wrap_method(method: _T_Method) -> _T_Method:
         if not HwMetric.metrics_enabled():
-
             if isinstance(method, Method):
                 method.__class__ = DummyMethod
             else:
@@ -276,8 +274,8 @@ class TaggedCounter(Elaboratable, HwMetric):
 
     Attributes
     ----------
-    tag_width: int
-        The length of the signal holding a tag value.
+    tag_shape: ShapeLike
+        The shape of the tags.
     one_hot: bool
         Whether tag values can be one-hot encoded.
     counters: dict[int, HwMetricRegisters]
@@ -289,7 +287,7 @@ class TaggedCounter(Elaboratable, HwMetric):
         fully_qualified_name: str,
         description: str = "",
         *,
-        tags: range | Type[Enum] | list[int],
+        tags: range | type[Enum] | list[int],
         registers_width: int = 32,
         ways: int = 1,
     ):
@@ -300,7 +298,7 @@ class TaggedCounter(Elaboratable, HwMetric):
             The fully qualified name of the metric.
         description: str
             A human-readable description of the metric's functionality.
-        tags: range | Type[Enum] | list[int]
+        tags: range | type[Enum] | list[int]
             Tag values.
         registers_width: int
             Width of the underlying registers. Defaults to 32 bits.
@@ -315,22 +313,24 @@ class TaggedCounter(Elaboratable, HwMetric):
         else:
             counters_meta = [(i.value, i.name) for i in tags]
 
+        if isinstance(tags, list):
+            self.tag_shape = range(min(tags), max(tags) + 1)
+        else:
+            self.tag_shape = tags
+
         values = [value for value, _ in counters_meta]
-        self.tag_width = max(bits_for(max(values)), bits_for(min(values)))
 
         self.one_hot = True
-        negative_values = False
         for value in values:
             if value < 0:
                 self.one_hot = False
-                negative_values = True
                 break
 
             log = ceil_log2(value)
             if 2**log != value:
                 self.one_hot = False
 
-        self.incr = self.wrap_method(Methods(ways, i=[("tag", Shape(self.tag_width, signed=negative_values))]))
+        self.incr = self.wrap_method(Methods(ways, i=[("tag", self.tag_shape)]))
 
         self.counters: dict[int, HwMetricRegister] = {}
         for tag_value, name in counters_meta:
@@ -356,12 +356,12 @@ class TaggedCounter(Elaboratable, HwMetric):
         @def_methods(m, self.incr)
         def _(k: int, tag):
             if self.one_hot:
-                sorted_tags = sorted(list(self.counters.keys()))
-                for i in OneHotSwitchDynamic(m, tag):
+                sorted_tags = sorted(self.counters.keys())
+                for i in OneHotSwitchDynamic(m, Value.cast(tag)):
                     m.d.comb += runs[sorted_tags[i]][k].eq(1)
             else:
                 for tag_value in self.counters.keys():
-                    with m.If(tag == tag_value):
+                    with m.If(Value.cast(tag) == tag_value):
                         m.d.comb += runs[tag_value][k].eq(1)
 
         for tag_value, counter in self.counters.items():
@@ -483,8 +483,8 @@ class HwExpHistogram(Elaboratable, HwMetric):
         def sample_or_default(method: Method, default: Value) -> Value:
             return Mux(method.run, method.data_in.sample, default)
 
-        method_min_samples = list(sample_or_default(m, C((1 << self.sample_width)) - 1) for m in self.add)
-        method_max_samples = list(sample_or_default(m, C(0)) for m in self.add)
+        method_min_samples = [sample_or_default(m, C((1 << self.sample_width)) - 1) for m in self.add]
+        method_max_samples = [sample_or_default(m, C(0)) for m in self.add]
 
         min_sample = min_value(self.min.value, method_min_samples)
         max_sample = max_value(self.max.value, method_max_samples)
@@ -783,8 +783,8 @@ class TaggedLatencyMeasurer(Elaboratable):
         self.slots_number = slots_number
         self.max_latency = max_latency
 
-        self.start = HwMetric.wrap_method(Methods(ways, i=[("slot", range(0, slots_number))]))
-        self.stop = HwMetric.wrap_method(Methods(ways, i=[("slot", range(0, slots_number))]))
+        self.start = HwMetric.wrap_method(Methods(ways, i=[("slot", range(slots_number))]))
+        self.stop = HwMetric.wrap_method(Methods(ways, i=[("slot", range(slots_number))]))
 
         # This bucket count gives us the best possible granularity.
         bucket_count = bits_for(self.max_latency) + 1
@@ -836,7 +836,7 @@ class TaggedLatencyMeasurer(Elaboratable):
             m.d.comb += slots_taken_stop[k].eq(~(C(1, self.slots_number) << slot))
             self.log.error(m, ~(slots_taken & (1 << slot)).any(), "free slot {} freed again", slot)
             ret = self.slots.read[k](m, addr=slot)
-            # The result of substracting two unsigned n-bit is a signed (n+1)-bit value,
+            # The result of subtracting two unsigned n-bit is a signed (n+1)-bit value,
             # so we need to cast the result and discard the most significant bit.
             duration = (epoch - ret.data).as_unsigned()[:-1]
             self.histogram.add[k](m, duration)

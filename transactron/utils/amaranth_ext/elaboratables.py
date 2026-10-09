@@ -4,8 +4,10 @@ from typing import Literal, Optional, overload
 from collections.abc import Iterable
 from amaranth import *
 from amaranth import ValueCastable
-from amaranth.lib.data import ArrayLayout
-from amaranth_types import HasElaborate, ShapeLike, ModuleLike, ValueLike
+from amaranth.lib.data import ArrayLayout, View
+from amaranth_types import FlatValueLike, HasElaborate, ShapeLike, ModuleLike, ValueLike
+
+from transactron.utils.amaranth_ext.functions import one_hot_mux, shape_of, top_module
 
 __all__ = [
     "OneHotSwitchDynamic",
@@ -16,6 +18,7 @@ __all__ = [
     "MultiPriorityEncoder",
     "RingMultiPriorityEncoder",
     "StableSelectingNetwork",
+    "OneHotMux",
 ]
 
 
@@ -278,7 +281,7 @@ class MultiPriorityEncoder(Elaboratable):
 
     @staticmethod
     def create(
-        m: Module, input_width: int, input: ValueLike, outputs_count: int = 1, name: Optional[str] = None
+        m: ModuleLike, input_width: int, input: ValueLike, outputs_count: int = 1, name: Optional[str] = None
     ) -> list[tuple[Value, Value]]:
         """Syntax sugar for creating MultiPriorityEncoder
 
@@ -327,11 +330,14 @@ class MultiPriorityEncoder(Elaboratable):
                 raise ValueError(f"Name: {name} is already in use, so MultiPriorityEncoder can not be added with it.")
             except AttributeError:
                 setattr(m.submodules, name, prio_encoder)
-        m.d.comb += prio_encoder.input.eq(input)
+        top_m = top_module(m)
+        top_m.d.comb += prio_encoder.input.eq(input)
         return [(prio_encoder.outputs[i], prio_encoder.valids[i]) for i in range(outputs_count)]
 
     @staticmethod
-    def create_simple(m: Module, input_width: int, input: ValueLike, name: Optional[str] = None) -> tuple[Value, Value]:
+    def create_simple(
+        m: ModuleLike, input_width: int, input: ValueLike, name: Optional[str] = None
+    ) -> tuple[Value, Value]:
         """Syntax sugar for creating MultiPriorityEncoder
 
         This is the same as `create` function, but with `outputs_count` hardcoded to 1.
@@ -339,7 +345,7 @@ class MultiPriorityEncoder(Elaboratable):
         lst = MultiPriorityEncoder.create(m, input_width, input, outputs_count=1, name=name)
         return lst[0]
 
-    def build_tree(self, m: Module, in_sig: Signal, start_idx: int):
+    def _build_tree(self, m: Module, in_sig: Signal, start_idx: int):
         assert len(in_sig) > 0
         level_outputs = [
             Signal(range(self.input_width), name=f"_lvl_out_idx{start_idx}_{i}") for i in range(self.outputs_count)
@@ -355,8 +361,8 @@ class MultiPriorityEncoder(Elaboratable):
             l_in = Signal(len(in_sig) - middle, name=f"_l_in_idx{start_idx}")
             m.d.comb += r_in.eq(in_sig[0:middle])
             m.d.comb += l_in.eq(in_sig[middle:])
-            r_out, r_val = self.build_tree(m, r_in, start_idx)
-            l_out, l_val = self.build_tree(m, l_in, start_idx + middle)
+            r_out, r_val = self._build_tree(m, r_in, start_idx)
+            l_out, l_val = self._build_tree(m, l_in, start_idx + middle)
 
             with m.Switch(Cat(r_val)):
                 for i in range(self.outputs_count + 1):
@@ -372,7 +378,7 @@ class MultiPriorityEncoder(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        level_outputs, level_valids = self.build_tree(m, self.input, 0)
+        level_outputs, level_valids = self._build_tree(m, self.input, 0)
 
         for k in range(self.outputs_count):
             m.d.comb += self.outputs[k].eq(level_outputs[k])
@@ -426,7 +432,7 @@ class RingMultiPriorityEncoder(Elaboratable):
 
     @staticmethod
     def create(
-        m: Module,
+        m: ModuleLike,
         input_width: int,
         input: ValueLike,
         first: ValueLike,
@@ -489,14 +495,15 @@ class RingMultiPriorityEncoder(Elaboratable):
                 )
             except AttributeError:
                 setattr(m.submodules, name, prio_encoder)
-        m.d.comb += prio_encoder.input.eq(input)
-        m.d.comb += prio_encoder.first.eq(first)
-        m.d.comb += prio_encoder.last.eq(last)
+        top_m = top_module(m)
+        top_m.d.comb += prio_encoder.input.eq(input)
+        top_m.d.comb += prio_encoder.first.eq(first)
+        top_m.d.comb += prio_encoder.last.eq(last)
         return [(prio_encoder.outputs[i], prio_encoder.valids[i]) for i in range(outputs_count)]
 
     @staticmethod
     def create_simple(
-        m: Module, input_width: int, input: ValueLike, first: ValueLike, last: ValueLike, name: Optional[str] = None
+        m: ModuleLike, input_width: int, input: ValueLike, first: ValueLike, last: ValueLike, name: Optional[str] = None
     ) -> tuple[Value, Value]:
         """Syntax sugar for creating RingMultiPriorityEncoder
 
@@ -613,65 +620,120 @@ class StableSelectingNetwork(Elaboratable):
 
 
 class OneHotMux(Elaboratable):
-    """One-hot multiplexer.
+    """One-hot multiplexer."""
 
-    If all select bits are 0, the `output` signal is set to `default_input`.
-    In the other case, the `output` signal is set to the input which
-    select bit is set. It is assumed that at most one `select` bit is set.
-
-    Attributes
-    ----------
-    inputs: Signal(ArrayLayout(shape, inputs_count)), in
-        Input signals.
-    select: Signal(inputs_count), in
-        Selection signal. When one of the select bits is set,
-        the corresponding input is assigned to `output`.
-    default_input: Signal(shape), in
-        Default input signal.
-    output: Signal(shape), out
-        Output signal. It is set to `default_input` or one of `inputs`
-        depending on `select`.
+    inputs: View
+    """
+    Input signals.
     """
 
-    def __init__(self, shape: ShapeLike, inputs_count: int):
+    select: Value
+    """
+    Selection signal. When one of the select bits is set, the corresponding input is assigned to `output`.
+    """
+
+    default_input: ValueCastable
+    """
+    Default input signal. Only present if `has_default` is True.
+    """
+
+    output: ValueCastable
+    """
+    Output signal. It is set to `default_input` or one of `inputs` depending on `select`.
+    """
+
+    def __init__(self, shape: ShapeLike, inputs_count: int, priority: bool = False, has_default: bool = True):
+        """Parameters
+        ----------
+        shape: ShapeLike
+            Shape of the inputs and output.
+        inputs_count: int
+            Number of inputs to select from.
+        priority: bool
+            If True do not assume that the select bits are one-hot, but choose the lowest on bit.
+        has_default: bool
+            Whether the multiplexer has a default input. If True, the output will be set to the default
+            input when all select bits are 0. If False, the output is zero when inputs_count > 1,
+            the only value if inputs_count == 1 and 0 vector if inputs_count == 0.
+        """
+
         self.inputs = Signal(ArrayLayout(shape, inputs_count))
         self.select = Signal(inputs_count)
-        self.default_input = Signal(shape)
-        self.output = Signal(shape)
+        if has_default:
+            self.default_input = Signal(shape)  # type: ignore
+        self.output = Signal(shape)  # type: ignore
+
+        self.shape = Shape.cast(shape)
+        self.priority = priority
+        self.has_default = has_default
+
+    @overload
+    @staticmethod
+    def create[T: ValueCastable](
+        m: ModuleLike, inputs: Iterable[tuple[ValueLike, T]], default_input: Optional[T] = None, priority: bool = False
+    ) -> T: ...
+
+    @overload
+    @staticmethod
+    def create(
+        m: ModuleLike,
+        inputs: Iterable[tuple[ValueLike, FlatValueLike]],
+        default_input: Optional[FlatValueLike] = None,
+        priority: bool = False,
+    ) -> Value: ...
 
     @staticmethod
-    def create(m: ModuleLike, inputs: Iterable[tuple[ValueLike, ValueLike]], default_input: ValueLike) -> ValueLike:
+    def create(
+        m: ModuleLike,
+        inputs: Iterable[tuple[ValueLike, ValueLike]],
+        default_input: Optional[ValueLike] = None,
+        priority: bool = False,
+    ) -> ValueLike:
         """Syntax sugar for creating a `OneHotMux`.
 
         Parameters
         ----------
         m: Module
             Module to add the `OneHotMux` to.
-        default_input: ValueLike
-            Default input.
-        forward_inputs: Iterable[tuple[ValueLike, ValueLike]]
+        inputs: Iterable[tuple[ValueLike, ValueLike]]
             Select bits and corresponding inputs.
+        default_input: ValueLike, optional
+            Default input. If not provided, the multiplexer will set the output to 0 vector when all select bits are 0.
+        priority: bool
+            If True do not assume that the select bits are one-hot, but choose the lowest on bit.
         """
-        if isinstance(default_input, ValueCastable):
-            input_shape = default_input.shape()
-        else:
-            input_shape = Value.cast(default_input).shape()
         inputs = list(inputs)
-        fw_net = OneHotMux(input_shape, len(inputs))
+
+        if default_input is not None:
+            input_shape = shape_of(default_input)
+        elif len(inputs) > 0:
+            input_shape = shape_of(inputs[0][1])
+        else:
+            raise ValueError(
+                "Can not infer the shape of the inputs for OneHotMux,"
+                + "because no inputs were provided and default input was not provided as well."
+            )
+
+        fw_net = OneHotMux(input_shape, len(inputs), priority=priority, has_default=default_input is not None)
         m.submodules += fw_net
-        m.d.comb += Value.cast(fw_net.default_input).eq(default_input)
+        top_m = top_module(m)
+        if default_input is not None:
+            top_m.d.comb += Value.cast(fw_net.default_input).eq(default_input)
         for i, (sel_bit, input) in enumerate(inputs):
-            m.d.comb += fw_net.select[i].eq(sel_bit)
-            m.d.comb += Value.cast(fw_net.inputs[i]).eq(input)
+            top_m.d.comb += fw_net.select[i].eq(Value.cast(sel_bit).any())
+            top_m.d.comb += Value.cast(fw_net.inputs[i]).eq(input)
         return fw_net.output
 
     def elaborate(self, platform):
         m = Module()
 
-        for i in OneHotSwitchDynamic(m, self.select, default=True):
-            if i is None:
-                m.d.comb += Value.cast(self.output).eq(self.default_input)
-            else:
-                m.d.comb += Value.cast(self.output).eq(self.inputs[i])
+        m.d.comb += Value.cast(self.output).eq(
+            one_hot_mux(
+                [(self.select[i], self.inputs[i]) for i in range(len(self.select))],
+                default=self.default_input if self.has_default else None,
+                priority=self.priority,
+                assert_one_hot=False,
+            )
+        )
 
         return m

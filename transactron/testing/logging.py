@@ -7,7 +7,7 @@ from amaranth import *
 from amaranth.lib.wiring import Component, connect, flipped
 from amaranth.sim._async import ProcessContext
 from amaranth_types import AbstractComponent, HasElaborate
-from transactron.lib import logging as tlog
+from transactron.utils import logging as tlog
 from transactron.utils.dependencies import DependencyContext
 from .tick_count import TicksKey
 
@@ -107,7 +107,7 @@ def make_logging_process(level: tlog.LogLevel, namespace_regexp: str, on_error: 
         async for _, _, ticks_val, combined_trigger_val, *record_vals in (
             sim.tick()
             .sample(ticks, combined_trigger)
-            .sample(*itertools.chain(*([record.trigger] + record.fields for record in records)))
+            .sample(*itertools.chain(*((record.trigger,) + record.fields for record in records)))
         ):
             if not combined_trigger_val:
                 continue
@@ -119,7 +119,7 @@ def make_logging_process(level: tlog.LogLevel, namespace_regexp: str, on_error: 
 
 class HDLLogWrapper(Elaboratable):
     """
-    Wrapper for a module to enable `lib.logging` backend for printing in HDL simulation.
+    Wrapper for a module to enable `utils.logging` backend for printing in HDL simulation.
     """
 
     def __init__(
@@ -155,15 +155,14 @@ class HDLLogWrapper(Elaboratable):
         for record in tlog.get_log_records(self.level, self.namespace_regexp):
             with m.If(record.trigger):
                 m.d.comb += any_trigger.eq(1)
-                format_str = (
-                    ("[{}] " if not self.print_cycle_separator else "")
-                    + f"{logging.getLevelName(record.level)} "
-                    + (f"{record.location} " if self.print_src_loc else "")
-                    + f"{record.logger_name}: "
-                    + record.format_str
+                m.d.sync += Print(
+                    Format("[{}] ", cycle) if not self.print_cycle_separator else "",
+                    f"{logging.getLevelName(record.level)} ",
+                    f"{record.location} " if self.print_src_loc else "",
+                    f"{record.logger_name}: ",
+                    record.to_amaranth_format(),
+                    sep="",
                 )
-                args = ([cycle] if not self.print_cycle_separator else []) + record.fields
-                m.d.sync += Print(Format(format_str, *args))
 
         return m
 

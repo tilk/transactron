@@ -9,9 +9,9 @@ from transactron.core.tmodule import CtrlPath, TModule
 from transactron.core.transaction_base import TransactionBase
 
 from amaranth import *
-from amaranth_types import ValueLike, SrcLoc
+from amaranth_types import ShapeLike, ValueLike, SrcLoc
 from typing import TYPE_CHECKING, ClassVar, NewType, NotRequired, Optional, Callable, TypedDict, Unpack, final
-from transactron.utils.amaranth_ext.elaboratables import OneHotSwitchDynamic
+from transactron.utils.amaranth_ext.elaboratables import OneHotMux
 from transactron.utils.assign import AssignArg
 from transactron.utils.transactron_helpers import from_method_layout, method_def_helper
 from transactron.utils.typing import MethodStruct
@@ -62,7 +62,7 @@ class Body(TransactionBase["Body"]):
         self.data_in: MethodStruct = Signal(from_method_layout(i), name=self.owned_name + "_data_in")
         self.data_out: MethodStruct = Signal(from_method_layout(o), name=self.owned_name + "_data_out")
         self.combiner: Callable[[Module, Sequence[MethodStruct], Value], AssignArg] = (
-            kwargs["combiner"] if "combiner" in kwargs else Body._default_combiner
+            kwargs["combiner"] if "combiner" in kwargs else Body._default_combiner(from_method_layout(i))
         )
         self.nonexclusive = kwargs["nonexclusive"] if "nonexclusive" in kwargs else False
         self.single_caller = kwargs["single_caller"] if "single_caller" in kwargs else False
@@ -82,10 +82,10 @@ class Body(TransactionBase["Body"]):
             if any(len(ctrl_path.path) > len(self.ctrl_path.path) + 1 for ctrl_path, _, _ in calls)
         }
 
-    def _validate_arguments(self, en: Value, arg_rec: MethodStruct) -> ValueLike:
+    def _validate_arguments(self, en: Value, arg_rec: MethodStruct) -> Value:
         if self.validate_arguments is not None:
-            return self.ready & (~en | method_def_helper(self, self.validate_arguments, arg_rec))
-        return self.ready
+            return ~en | Value.cast(method_def_helper(self, self.validate_arguments, arg_rec)).bool()
+        return C(1)
 
     @contextmanager
     def context(self, m: TModule) -> Iterator["Body"]:
@@ -117,14 +117,11 @@ class Body(TransactionBase["Body"]):
         return Body.stack[-1]
 
     @staticmethod
-    def _default_combiner(m: Module, args: Sequence[MethodStruct], runs: Value) -> AssignArg:
-        if len(args) == 1:
-            return args[0]
-        else:
-            ret = Signal.like(args[0])
-            for k in OneHotSwitchDynamic(m, runs):
-                m.d.comb += ret.eq(args[k])
-            return ret
+    def _default_combiner(shape: ShapeLike):
+        def impl(m: Module, args: Sequence[MethodStruct], runs: Value) -> AssignArg:
+            return OneHotMux.create(m, [(runs[i], args[i]) for i in range(len(args))])
+
+        return impl
 
 
 TBody = NewType("TBody", Body)

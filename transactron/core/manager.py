@@ -8,8 +8,6 @@ from amaranth import *
 from itertools import chain, filterfalse, product
 import networkx
 
-from amaranth_types import ValueLike
-
 from transactron.utils import *
 from transactron.utils.transactron_helpers import _graph_ccs
 from transactron.graph import OwnershipGraph, Direction
@@ -43,7 +41,7 @@ class CallInfo:
     ancestors: tuple[MBody, ...]
     call_path: tuple[CtrlPath, ...]
     arg: MethodStruct
-    enable: ValueLike
+    enable: Value
 
 
 class MethodMap:
@@ -105,7 +103,7 @@ class MethodMap:
             source: Body,
             ancestors: tuple[MBody, ...],
             call_path: tuple[CtrlPath, ...],
-            call_enable: ValueLike,
+            call_enable: Value,
         ):
             for method_obj, calls in source.method_calls.items():
                 method = MBody(method_obj._body)
@@ -300,11 +298,10 @@ class TransactionManager(Elaboratable):
         return cgr, porder
 
     @staticmethod
-    def _ready_dependencies(transactions: Sequence[Transaction], methods: Sequence[Method]) -> Graph[Body]:
+    def _ready_dependencies(method_map: MethodMap) -> Graph[Body]:
         ready_dependencies = defaultdict[Body, set[Body]](set)
 
-        for elem in chain(transactions, methods):
-            body = elem._body
+        for body in method_map.methods_and_transactions:
             for relation in body.relations:
                 if not relation.ready_dependent:
                     continue
@@ -329,8 +326,8 @@ class TransactionManager(Elaboratable):
         return (args, runs)
 
     @staticmethod
-    def _conditionally_called_methods(method_map: MethodMap) -> set[MBody]:
-        ret: set[MBody] = set()
+    def _conditionally_called(method_map: MethodMap) -> set[Body]:
+        ret: set[Body] = set()
 
         for (transaction, method), calls in method_map.info_by_call.items():
             for call in calls:
@@ -339,10 +336,34 @@ class TransactionManager(Elaboratable):
                         ret.add(method)
                         break
 
+        # Transactions that are simultaneous and have ready dependency to an conditionally called method behave
+        # like conditionally called -> add them to the set
+        conditional_to_infect = list(ret)
+        while conditional_to_infect:
+            method = conditional_to_infect.pop()
+            ready_dependent = {relation.end for relation in method.relations if relation.ready_dependent}
+            for dep in method.simultaneous_list:
+                if dep in ready_dependent and dep in method_map.transactions:
+                    # dep is simultaneous with conditionally called method - all called methods of dep are also
+                    # conditionally called
+                    for called_method in method_map.methods_by_transaction[TBody(dep)]:
+                        if called_method not in ret:
+                            ret.add(called_method)
+                            conditional_to_infect.append(called_method)
+                    ret.add(dep)
+                else:
+                    # dep is not ready dependent - semantics unclear
+                    raise RuntimeError(
+                        "Simultaneity constraint for conditionally called method "
+                        f"'{method.name}' {method.src_loc} not supported"
+                    )
+
         return ret
 
     def _simultaneous(self):
         method_map = MethodMap(self.transactions, self.methods)
+        ready_dependencies = self._ready_dependencies(method_map)
+        conditionally_called = self._conditionally_called(method_map)
 
         # remove orderings between simultaneous methods/transactions
         # TODO: can it be done after transitivity, possibly catching more cases?
@@ -350,9 +371,9 @@ class TransactionManager(Elaboratable):
             all_sims = frozenset(elem.simultaneous_list)
             elem.relations = list(
                 filterfalse(
-                    lambda relation: not relation.conflict
-                    and relation.priority != Priority.UNDEFINED
-                    and relation.end in all_sims,
+                    lambda relation: (
+                        not relation.conflict and relation.priority != Priority.UNDEFINED and relation.end in all_sims
+                    ),
                     elem.relations,
                 )
             )
@@ -374,16 +395,7 @@ class TransactionManager(Elaboratable):
             for sim_elem in elem.simultaneous_list:
                 all_simultaneous.update(method_map.transactions_for(sim_elem))
 
-        conditionally_called_methods = self._conditionally_called_methods(method_map)
-
         for elem in method_map.methods_and_transactions:
-            if elem.simultaneous_list and elem in conditionally_called_methods:
-                # nested definitions do not trigger the issue
-                if any(not elem.ctrl_path.is_proper_prefix(sim_elem.ctrl_path) for sim_elem in elem.simultaneous_list):
-                    raise RuntimeError(
-                        "Simultaneity constraint for conditionally called method "
-                        f"'{elem.name}' {elem.src_loc} not supported"
-                    )
             for sim_elem in elem.simultaneous_list:
                 for tr1, tr2 in product(method_map.transactions_for(elem), method_map.transactions_for(sim_elem)):
                     if tr1 in independents[tr2]:
@@ -439,7 +451,8 @@ class TransactionManager(Elaboratable):
                 name = "_".join([t.name for t in group])
                 with Transaction(name=name).body(m):
                     for transaction in group:
-                        methods[transaction](m)
+                        nontrivial_deps = ready_dependencies[transaction] & conditionally_called
+                        methods[transaction](m, enable_call=Cat(dep.run for dep in nontrivial_deps).all())
             self.transactions += DependencyContext.get().get_dependency(TransactionsKey())
 
         return m
@@ -467,7 +480,7 @@ class TransactionManager(Elaboratable):
             method_map = MethodMap(self.transactions, self.methods)
             cgr, porder = TransactionManager._conflict_graph(method_map)
 
-        ready_dependencies = TransactionManager._ready_dependencies(self.transactions, self.methods)
+        ready_dependencies = self._ready_dependencies(method_map)
 
         for transaction in method_map.transactions:
             for dep in ready_dependencies[transaction]:
@@ -499,25 +512,20 @@ class TransactionManager(Elaboratable):
 
             def validate_args_for_method(method: MBody):
                 calls = method_map.info_by_call[(transaction, method)]
-                arg_rec = Signal.like(method.data_in)
-                en = Signal()
+                if method.nonexclusive:
+                    return Cat(method._validate_arguments(call.enable, call.arg) for call in calls).all()
 
-                if len(calls) == 1:
-                    m.d.comb += arg_rec.eq(calls[0].arg)
-                    m.d.comb += en.eq(1)
-                else:
-                    # Only one call can be active per method and transaction due to call-path exclusivity.
-                    for i in OneHotSwitchDynamic(m, Cat(call.enable for call in calls)):
-                        m.d.comb += arg_rec.eq(calls[i].arg)
-                        m.d.comb += en.eq(1)
-
-                return method._validate_arguments(en, arg_rec)
+                combined = OneHotMux.create(m, [(call.enable, call.arg) for call in calls])
+                return method._validate_arguments(Cat(call.enable for call in calls).any(), combined)
 
             runnable_terms = [
-                validate_args_for_method(method) for method in method_map.methods_by_transaction[transaction]
+                body.ready & Cat(dep.run for dep in ready_dependencies[body]).all()
+                for body in method_map.ready_for_transaction(transaction)
             ]
             runnable_terms.extend(
-                dep.run for body in method_map.ready_for_transaction(transaction) for dep in ready_dependencies[body]
+                validate_args_for_method(method)
+                for method in method_map.methods_by_transaction[transaction]
+                if method.validate_arguments is not None
             )
             m.d.comb += transaction.runnable.eq(Cat(runnable_terms).all())
 

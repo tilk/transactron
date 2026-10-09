@@ -1,3 +1,4 @@
+import os
 import sys
 from contextlib import contextmanager
 from typing import Optional, Any, Concatenate, TypeGuard
@@ -23,6 +24,7 @@ __all__ = [
     "async_mock_def_helper",
     "SrcLoc",
     "get_src_loc",
+    "local_src_loc",
     "from_method_layout",
     "make_layout",
     "extend_layout",
@@ -75,9 +77,9 @@ def longest_common_prefix[T](*seqs: Sequence[T]) -> Sequence[T]:
     return min(seqs, key=lambda s: len(s))
 
 
-def has_first_param[
-    T, U
-](func: Callable[..., T], name: str, tp: type[U]) -> TypeGuard[Callable[Concatenate[U, ...], T]]:
+def has_first_param[T, U](
+    func: Callable[..., T], name: str, tp: type[U]
+) -> TypeGuard[Callable[Concatenate[U, ...], T]]:
     parameters = signature(func).parameters
     return (
         len(parameters) >= 1
@@ -93,9 +95,9 @@ def def_helper[T, U](description, func: Callable[..., T], tp: type[U], arg: U, /
     except ValueError:
         raise TypeError(f"Invalid python method signature for {func} (missing `self` for class-level mock?)")
 
-    kw_parameters = set(
+    kw_parameters = {
         n for n, p in parameters.items() if p.kind in {Parameter.POSITIONAL_OR_KEYWORD, Parameter.KEYWORD_ONLY}
-    )
+    }
     if len(parameters) == 1 and has_first_param(func, "arg", tp):
         return func(arg)
     elif kw_parameters <= kwargs.keys():
@@ -148,6 +150,10 @@ def silence_mustuse(elaboratable: Elaboratable):
 
 def get_src_loc(src_loc: int | SrcLoc) -> SrcLoc:
     return tracer.get_src_loc(1 + src_loc) if isinstance(src_loc, int) else src_loc
+
+
+def local_src_loc(src_loc: SrcLoc) -> SrcLoc:
+    return (os.path.relpath(src_loc[0]), src_loc[1])
 
 
 def from_layout_field(shape: ShapeLike | LayoutList) -> ShapeLike:

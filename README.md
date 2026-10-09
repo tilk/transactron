@@ -32,6 +32,11 @@ The library is in alpha stage of development, but is already well tested because
 The [documentation](https://kuznia-rdzeni.github.io/transactron/) is automatically generated using [Sphinx](https://www.sphinx-doc.org/).
 It includes a [tutorial](https://kuznia-rdzeni.github.io/transactron/getting-started.html), which demonstrates how to start developing hardware using Transactron.
 
+## Community
+
+We have a community IRC channel - [#coreforge at libera.chat](https://web.libera.chat/#coreforge) bridged with Matrix [#coreforge:fossi-chat.org](https://matrix.to/#/#coreforge:fossi-chat.org).
+You are welcome to join and share feedback, ask questions, or discuss the development of Coreforge Foundation projects :)
+
 ## Contributing
 
 Set up the [development environment](https://kuznia-rdzeni.github.io/transactron/development-environment.html) following the project documetation.
@@ -42,6 +47,4 @@ This way, you can ensure that the contribution fits the project and will be merg
 
 ## License
 
-Copyright © 2022-2024, University of Wrocław.
-
-This project is [three-clause BSD](https://github.com/kuznia-rdzeni/transactron/blob/master/LICENSE) licensed.
+This project is [three-clause BSD licensed](https://github.com/kuznia-rdzeni/transactron/blob/master/LICENSE).

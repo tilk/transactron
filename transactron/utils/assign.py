@@ -2,10 +2,11 @@ from enum import Enum
 from typing import Optional, TypeAlias, cast, TYPE_CHECKING
 from collections.abc import Sequence, Iterable, Mapping
 from amaranth import *
-from amaranth.hdl import ShapeLike, ValueCastable
+from amaranth.hdl import ValueCastable
 from amaranth.hdl._ast import ArrayProxy, Slice
 from amaranth.lib import data
 from amaranth_types import ValueLike
+from transactron.utils.amaranth_ext.functions import shape_of
 
 if TYPE_CHECKING:
     from amaranth.hdl._ast import Assign
@@ -43,23 +44,16 @@ def arrayproxy_fields(proxy: ArrayProxy) -> Optional[set[str | int]]:
 def assign_arg_fields(val: AssignArg) -> Optional[set[str | int]]:
     if isinstance(val, ArrayProxy):
         return arrayproxy_fields(val)
-    elif isinstance(val, data.View):
+    elif isinstance(val, (data.View, data.Const)):
         layout = val.shape()
         if isinstance(layout, data.StructLayout):
-            return set(k for k in layout.members)
+            return set(layout.members)
         if isinstance(layout, data.ArrayLayout):
             return set(range(layout.length))
     elif isinstance(val, dict):
         return set(val.keys())
     elif isinstance(val, list):
         return set(range(len(val)))
-
-
-def valuelike_shape(val: ValueLike) -> ShapeLike:
-    if isinstance(val, Value) or isinstance(val, ValueCastable):
-        return val.shape()
-    else:
-        return Value.cast(val).shape()
 
 
 def is_union(val: AssignArg):
@@ -136,8 +130,8 @@ def assign(
             lhs[name],  # type: ignore
             rhs[name],  # type: ignore
             fields=subfields,
-            lhs_strict=isinstance(lhs, ValueLike),
-            rhs_strict=isinstance(rhs, ValueLike),
+            lhs_strict=isinstance(lhs, ValueLike) and not isinstance(lhs[name], int),  # type: ignore
+            rhs_strict=isinstance(rhs, ValueLike) and not isinstance(rhs[name], int),  # type: ignore
         )
 
     if lhs_fields is not None and rhs_fields is not None:
@@ -147,12 +141,14 @@ def assign(
             or isinstance(lhs, Mapping)
             or isinstance(lhs, Sequence)
             or isinstance(lhs, data.View)
+            or isinstance(lhs, data.Const)
         )
         assert (
             isinstance(rhs, ArrayProxy)
             or isinstance(rhs, Mapping)
             or isinstance(rhs, Sequence)
             or isinstance(rhs, data.View)
+            or isinstance(rhs, data.Const)
         )
 
         if fields is AssignType.COMMON:
@@ -214,10 +210,10 @@ def assign(
             or (lhs_strict or has_explicit_shape(lhs))
             and (rhs_strict or has_explicit_shape(rhs))
         ):
-            if valuelike_shape(lhs) != valuelike_shape(rhs):
+            if shape_of(lhs) != shape_of(rhs):
                 raise ValueError(
                     "Shapes not matching: lhs: {} {} rhs: {} {}".format(
-                        valuelike_shape(lhs), repr(lhs), valuelike_shape(rhs), repr(rhs)
+                        shape_of(lhs), repr(lhs), shape_of(rhs), repr(rhs)
                     )
                 )
 

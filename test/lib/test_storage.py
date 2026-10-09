@@ -1,3 +1,4 @@
+from amaranth import *
 from collections.abc import Callable
 from amaranth_types import ShapeLike
 import pytest
@@ -8,20 +9,22 @@ from hypothesis import given, settings, Phase
 import amaranth.lib.memory as memory
 import amaranth_types.memory as amemory
 from transactron.testing import *
+from transactron.testing.input_generation import amaranth_structs, generate_input
 from transactron.lib.storage import *
 from transactron.utils.amaranth_ext.memory import MultiportXORMemory, MultiportXORILVTMemory, MultiportOneHotILVTMemory
 from transactron.utils.transactron_helpers import make_layout
+from transactron.utils.data_repr import data_layout
 
 
 class TestContentAddressableMemory(TestCaseWithSimulator):
     addr_width = 4
     content_width = 5
     test_number = 30
-    nop_number = 3
+    max_nop = 3
     addr_layout = data_layout(addr_width)
     content_layout = data_layout(content_width)
 
-    def setUp(self):
+    def set_up(self):
         self.entries_count = 8
 
         self.circ = SimpleTestCircuit(
@@ -45,7 +48,7 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
                 # wait till all processes will end the previous cycle
                 await sim.delay(1e-9)
                 elem = input_lst.pop()
-                if isinstance(elem, OpNOP):
+                if elem is None:
                     await sim.tick()
                     continue
                 if input_verification is not None and not input_verification(elem):
@@ -63,7 +66,7 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
 
     def push_process(self, in_push):
         def verify_in(elem):
-            return not (frozenset(elem["addr"].items()) in self.memory)
+            return frozenset(elem["addr"].items()) not in self.memory
 
         def modify_state(elem, response):
             self.memory[frozenset(elem["addr"].items())] = elem["data"]
@@ -94,7 +97,23 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
             if frozenset(elem["addr"].items()) in self.memory:
                 del self.memory[frozenset(elem["addr"].items())]
 
-        return self.generic_process(self.circ.remove, in_remove, state_change=modify_state, settle_count=2, name="remv")
+        p = self.generic_process(self.circ.remove, in_remove, state_change=modify_state, settle_count=2, name="remv")
+
+        async def process(sim: TestbenchContext):
+            await p(sim)
+
+            # The input generator doesn't guarantee that every data gets freed, which leads to lockups.
+            # This hack cleans the memory, allowing tests to complete.
+            while True:
+                await sim.delay(5e-9)
+                while not self.memory:
+                    await sim.tick()
+                    await sim.delay(5e-9)
+                addr = next(iter(self.memory.keys()))
+                del self.memory[addr]
+                await self.circ.remove.call(sim, addr=dict(addr))
+
+        return process
 
     def write_process(self, in_write):
         def verify_in(elem):
@@ -121,23 +140,21 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
     @settings(
         max_examples=10,
         phases=(Phase.explicit, Phase.reuse, Phase.generate, Phase.shrink),
-        derandomize=True,
         deadline=timedelta(milliseconds=2000),
     )
     @given(
-        generate_process_input(test_number, nop_number, [("addr", addr_layout), ("data", content_layout)]),
-        generate_process_input(test_number, nop_number, [("addr", addr_layout), ("data", content_layout)]),
-        generate_process_input(test_number, nop_number, [("addr", addr_layout)]),
-        generate_process_input(test_number, nop_number, [("addr", addr_layout)]),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout, "data": content_layout}), max_nones=max_nop),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout, "data": content_layout}), max_nones=max_nop),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout}), max_nones=max_nop),
+        generate_input(test_number, amaranth_structs({"addr": addr_layout}), max_nones=max_nop),
     )
     def test_random(self, in_push, in_write, in_read, in_remove):
-        with self.reinitialize_fixtures():
-            self.setUp()
-            with self.run_simulation(self.circ, max_cycles=500) as sim:
-                sim.add_testbench(self.push_process(in_push))
-                sim.add_testbench(self.read_process(in_read))
-                sim.add_testbench(self.write_process(in_write))
-                sim.add_testbench(self.remove_process(in_remove))
+        self.set_up()
+        with self.run_simulation(self.circ, max_cycles=500) as sim:
+            sim.add_testbench(self.push_process(in_push))
+            sim.add_testbench(self.read_process(in_read))
+            sim.add_testbench(self.write_process(in_write))
+            sim.add_testbench(self.remove_process(in_remove), background=True)
 
 
 bank_shapes = [
@@ -293,7 +310,7 @@ class TestAsyncMemoryBank(TestCaseWithSimulator):
             ),
         )
 
-        data: list[int] = list(0 for i in range(max_addr))
+        data: list[int] = [0 for i in range(max_addr)]
 
         random.seed(seed)
 
