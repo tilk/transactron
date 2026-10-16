@@ -207,6 +207,7 @@ def def_method_mocks(
         return {"data": data + k}
     ```
     """
+
     def decorator(func: Callable[..., Optional[NameIntDict]]) -> Callable[[], list[MethodMock]]:
         @functools.wraps(func)
         def mock(func_self=None, /) -> list[MethodMock]:
