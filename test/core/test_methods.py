@@ -11,7 +11,6 @@ from transactron import *
 from transactron.utils import MethodStruct
 from transactron.lib import *
 
-from unittest import TestCase
 
 from transactron.utils.amaranth_ext.functions import popcount
 from transactron.utils.assign import AssignArg
@@ -178,7 +177,7 @@ class AdapterCircuit(Elaboratable):
         return m
 
 
-class TestInvalidMethods(TestCase):
+class TestInvalidMethods(TestCaseWithSimulator):
     def assert_re(self, msg, m):
         with pytest.raises(RuntimeError, match=msg):
             Fragment.get(TransactronContextElaboratable(m), platform=None)
