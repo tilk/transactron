@@ -19,7 +19,8 @@ sub_check_format() {
 }
 
 sub_format(){
-    ruff check --fix $@ && ruff format $@
+    ruff check --fix $@; ret=$?
+    ruff format $@ && return $ret
 }
 
 sub_check_types(){
