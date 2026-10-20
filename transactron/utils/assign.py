@@ -211,9 +211,7 @@ def assign(
             and (rhs_strict or has_explicit_shape(rhs))
         ):
             if shape_of(lhs) != shape_of(rhs):
-                raise ValueError(
-                    f"Shapes not matching: lhs: {shape_of(lhs)} {lhs!r} rhs: {shape_of(rhs)} {rhs!r}"
-                )
+                raise ValueError(f"Shapes not matching: lhs: {shape_of(lhs)} {lhs!r} rhs: {shape_of(rhs)} {rhs!r}")
 
         lhs_val = Value.cast(lhs)
         rhs_val = Value.cast(rhs)

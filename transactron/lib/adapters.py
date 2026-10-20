@@ -56,9 +56,7 @@ class AdapterTrans(AdapterBase):
     iface: Required[Method]
     """The method called by the `AdapterTrans`."""
 
-    def __init__(
-        self, name: str | None = None, i: MethodLayout = [], o: MethodLayout = [], src_loc: int | SrcLoc = 0
-    ):
+    def __init__(self, name: str | None = None, i: MethodLayout = [], o: MethodLayout = [], src_loc: int | SrcLoc = 0):
         """
         Parameters
         ----------

@@ -288,9 +288,7 @@ def generic_shift_vec_left(
 
 
 @overload
-def shift_vec_right[T: ValueCastable](
-    data: Sequence[T], offset: ValueLike, placeholder: T | None
-) -> Sequence[T]: ...
+def shift_vec_right[T: ValueCastable](data: Sequence[T], offset: ValueLike, placeholder: T | None) -> Sequence[T]: ...
 
 
 @overload
