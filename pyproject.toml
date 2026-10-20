@@ -9,7 +9,7 @@ readme = "README.md"
 description = "Hardware transactions library for Amaranth"
 dependencies = [
     "amaranth ~= 0.5.8",
-    "amaranth-stubs ~= 0.5.0.5",
+    "amaranth-stubs ~= 0.5.0.8",
     "dataclasses-json ~= 0.6.3",
     "tabulate ~= 0.9.0",
     "networkx ~= 3.4.2"
@@ -88,11 +88,17 @@ select = [
     "Q",    # flake8-quotes
     "RSE",  # flake8-raise
     "FLY",  # flynt (don't use old style formatting)
-    "PLE"   # pylint error
+    "PLE",  # pylint error
+    "RUF",  # ruff-specific rules
+    "UP",   # pyupgrade
 ]
 ignore = [
-    "F403", # star imports
-    "F405"  # use of name from star imports
+    "F403",   # star imports
+    "F405",   # use of name from star imports
+    "RUF005", # does not like list concatenation for some reason
+    "RUF021", # requires redundant parentheses around and expressions
+    "RUF100", # unused noqa, seems nice but does spurious reports
+    "UP037",  # remove quotes from type annotation (TODO py3.14)
 ]
 
 [tool.ruff.lint.pep8-naming]

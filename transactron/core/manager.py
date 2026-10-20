@@ -2,7 +2,6 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterable, Sequence, Collection, Mapping
 import textwrap
 from dataclasses import dataclass
-from typing import TypeAlias
 from os import environ
 from amaranth import *
 from itertools import chain, filterfalse, product
@@ -22,10 +21,10 @@ from .schedulers import eager_deterministic_cc_scheduler
 
 __all__ = ["TransactionManager"]
 
-TransactionGraph: TypeAlias = Graph[TBody]
-TransactionGraphCC: TypeAlias = GraphCC[TBody]
-PriorityOrder: TypeAlias = dict[TBody, int]
-TransactionScheduler: TypeAlias = Callable[["MethodMap", TransactionGraph, TransactionGraphCC, PriorityOrder], Module]
+type TransactionGraph = Graph[TBody]
+type TransactionGraphCC = GraphCC[TBody]
+type PriorityOrder = dict[TBody, int]
+type TransactionScheduler = Callable[[MethodMap, TransactionGraph, TransactionGraphCC, PriorityOrder], Module]
 
 
 def call_paths_exclusive(path1: tuple[CtrlPath, ...], path2: tuple[CtrlPath, ...]):
