@@ -5,7 +5,9 @@ import pytest
 import random
 from collections import deque
 from datetime import timedelta
-from hypothesis import given, settings, Phase
+from dataclasses import dataclass, field
+from hypothesis import example, given, settings, Phase
+from hypothesis import strategies as st
 import amaranth.lib.memory as memory
 import amaranth_types.memory as amemory
 from transactron.testing import *
@@ -157,42 +159,79 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
             sim.add_testbench(self.remove_process(in_remove), background=True)
 
 
+@dataclass(frozen=True)
+class BankShape:
+    shape: ShapeLike
+    to_shape: Callable = field(repr=False)
+    from_shape: Callable = field(repr=False)
+
+
 bank_shapes = [
-    (6, lambda x: x, lambda x: x),
-    (make_layout(("data_field", 6)), lambda x: {"data_field": x}, lambda x: x["data_field"]),
+    BankShape(6, lambda x: x, lambda x: x),
+    BankShape(make_layout(("data_field", 6)), lambda x: {"data_field": x}, lambda x: x["data_field"]),
 ]
 
 
-class TestMemoryBank(TestCaseWithSimulator):
-    test_conf = [(9, 3, 3, 3, 14), (16, 1, 1, 3, 15), (16, 1, 1, 1, 16), (12, 3, 1, 1, 17), (9, 0, 0, 0, 18)]
+@dataclass(frozen=True)
+class MemoryBankConf:
+    max_addr: int
+    writer_rand: int
+    reader_req_rand: int
+    reader_resp_rand: int
+    seed: int
+    transparent: bool
+    read_on_resp: bool
+    read_ports: int
+    write_ports: int
+    shape: BankShape
 
-    @pytest.mark.parametrize("max_addr, writer_rand, reader_req_rand, reader_resp_rand, seed", test_conf)
-    @pytest.mark.parametrize("transparent", [False, True])
-    @pytest.mark.parametrize("read_on_resp", [False, True])
-    @pytest.mark.parametrize("read_ports", [1, 4])
-    @pytest.mark.parametrize("write_ports", [1, 4])
+
+@st.composite
+def memory_bank_confs(draw: st.DrawFn) -> MemoryBankConf:
+    write_ports = draw(st.integers(1, 4))
+    return MemoryBankConf(
+        # writers lock addresses, so there must be at least as many addresses as write ports
+        max_addr=draw(st.integers(write_ports, 20)),
+        writer_rand=draw(st.integers(0, 3)),
+        reader_req_rand=draw(st.integers(0, 3)),
+        reader_resp_rand=draw(st.integers(0, 3)),
+        seed=draw(st.integers(0, 2**32 - 1)),
+        transparent=draw(st.booleans()),
+        read_on_resp=draw(st.booleans()),
+        read_ports=draw(st.integers(1, 4)),
+        write_ports=write_ports,
+        shape=draw(st.sampled_from(bank_shapes)),
+    )
+
+
+class TestMemoryBank(TestCaseWithSimulator):
     @pytest.mark.parametrize(
         "memory_type",
         [memory.Memory, MultiportXORMemory, MultiportXORILVTMemory, MultiportOneHotILVTMemory],
     )
-    @pytest.mark.parametrize("shape,to_shape,from_shape", bank_shapes)
+    @settings(max_examples=20, deadline=None)
+    @given(memory_bank_confs())
+    # pipelined operation, checked against a strict cycle bound
+    @example(MemoryBankConf(9, 0, 0, 0, 18, False, False, 1, 1, bank_shapes[0]))
+    @example(MemoryBankConf(9, 0, 0, 0, 18, True, True, 4, 4, bank_shapes[1]))
     def test_mem(
         self,
-        max_addr: int,
-        writer_rand: int,
-        reader_req_rand: int,
-        reader_resp_rand: int,
-        seed: int,
-        transparent: bool,
-        read_on_resp: bool,
-        read_ports: int,
-        write_ports: int,
         memory_type: amemory.AbstractMemoryConstructor[ShapeLike, Value],
-        shape: ShapeLike,
-        to_shape: Callable,
-        from_shape: Callable,
+        conf: MemoryBankConf,
     ):
         test_count = 200
+
+        max_addr = conf.max_addr
+        transparent = conf.transparent
+        read_on_resp = conf.read_on_resp
+        read_ports = conf.read_ports
+        write_ports = conf.write_ports
+        shape = conf.shape.shape
+        to_shape = conf.shape.to_shape
+        from_shape = conf.shape.from_shape
+        writer_rand = conf.writer_rand
+        reader_req_rand = conf.reader_req_rand
+        reader_resp_rand = conf.reader_resp_rand
 
         m = SimpleTestCircuit(
             MemoryBank(
@@ -210,7 +249,7 @@ class TestMemoryBank(TestCaseWithSimulator):
         read_req_queues = [deque() for _ in range(read_ports)]
         address_lock = [False] * max_addr
 
-        random.seed(seed)
+        random.seed(conf.seed)
 
         def writer(i):
             async def process(sim: TestbenchContext):
@@ -280,25 +319,43 @@ class TestMemoryBank(TestCaseWithSimulator):
                 sim.add_testbench(writer(i))
 
 
-class TestAsyncMemoryBank(TestCaseWithSimulator):
-    @pytest.mark.parametrize(
-        "max_addr, writer_rand, reader_rand, seed", [(9, 3, 3, 14), (16, 1, 1, 15), (16, 1, 1, 16), (12, 3, 1, 17)]
+@dataclass(frozen=True)
+class AsyncMemoryBankConf:
+    max_addr: int
+    writer_rand: int
+    reader_rand: int
+    seed: int
+    read_ports: int
+    write_ports: int
+    shape: BankShape
+
+
+@st.composite
+def async_memory_bank_confs(draw: st.DrawFn) -> AsyncMemoryBankConf:
+    return AsyncMemoryBankConf(
+        max_addr=draw(st.integers(1, 20)),
+        writer_rand=draw(st.integers(1, 3)),
+        reader_rand=draw(st.integers(1, 3)),
+        seed=draw(st.integers(0, 2**32 - 1)),
+        read_ports=draw(st.integers(1, 2)),
+        write_ports=draw(st.integers(1, 2)),
+        shape=draw(st.sampled_from(bank_shapes)),
     )
-    @pytest.mark.parametrize("read_ports", [1, 2])
-    @pytest.mark.parametrize("write_ports", [1, 2])
-    @pytest.mark.parametrize("shape,to_shape,from_shape", bank_shapes)
-    def test_mem(
-        self,
-        max_addr: int,
-        writer_rand: int,
-        reader_rand: int,
-        seed: int,
-        read_ports: int,
-        write_ports: int,
-        shape: ShapeLike,
-        to_shape: Callable,
-        from_shape: Callable,
-    ):
+
+
+class TestAsyncMemoryBank(TestCaseWithSimulator):
+    @settings(max_examples=20, deadline=None)
+    @given(async_memory_bank_confs())
+    def test_mem(self, conf: AsyncMemoryBankConf):
+        max_addr = conf.max_addr
+        read_ports = conf.read_ports
+        write_ports = conf.write_ports
+        shape = conf.shape.shape
+        to_shape = conf.shape.to_shape
+        from_shape = conf.shape.from_shape
+        writer_rand = conf.writer_rand
+        reader_rand = conf.reader_rand
+
         test_count = 200
 
         m = SimpleTestCircuit(
@@ -312,7 +369,7 @@ class TestAsyncMemoryBank(TestCaseWithSimulator):
 
         data: list[int] = [0 for i in range(max_addr)]
 
-        random.seed(seed)
+        random.seed(conf.seed)
 
         def writer(i):
             async def process(sim: TestbenchContext):
