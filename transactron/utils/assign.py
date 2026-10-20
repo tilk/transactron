@@ -24,8 +24,8 @@ class AssignType(Enum):
     ALL = 4
 
 
-type AssignFields = AssignType | Iterable[str | int] | Mapping[str | int, "AssignFields"]
-type AssignArg = ValueLike | Mapping[str, "AssignArg"] | Mapping[int, "AssignArg"] | Sequence["AssignArg"]
+type AssignFields = AssignType | Iterable[str | int] | Mapping[str | int, AssignFields]
+type AssignArg = ValueLike | Mapping[str, AssignArg] | Mapping[int, AssignArg] | Sequence[AssignArg]
 
 
 def arrayproxy_fields(proxy: ArrayProxy) -> set[str | int] | None:

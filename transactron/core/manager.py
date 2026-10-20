@@ -24,7 +24,7 @@ __all__ = ["TransactionManager"]
 type TransactionGraph = Graph[TBody]
 type TransactionGraphCC = GraphCC[TBody]
 type PriorityOrder = dict[TBody, int]
-type TransactionScheduler = Callable[["MethodMap", TransactionGraph, TransactionGraphCC, PriorityOrder], Module]
+type TransactionScheduler = Callable[[MethodMap, TransactionGraph, TransactionGraphCC, PriorityOrder], Module]
 
 
 def call_paths_exclusive(path1: tuple[CtrlPath, ...], path2: tuple[CtrlPath, ...]):

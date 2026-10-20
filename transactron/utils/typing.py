@@ -30,16 +30,16 @@ __all__ = [
 ]
 
 # Internal Transactron types
-type DebugBundle = Value | ValueCastable | Iterable["DebugBundle"] | Mapping[str, "DebugBundle"]
-type ValueBundle = Value | View | Iterable["ValueBundle"] | Mapping[str, "ValueBundle"]
-type LayoutListField = tuple[str, "ShapeLike | LayoutList"]
-type LayoutList = list["LayoutListField"]
-type LayoutIterable = Iterable["LayoutListField"]
+type DebugBundle = Value | ValueCastable | Iterable[DebugBundle] | Mapping[str, DebugBundle]
+type ValueBundle = Value | View | Iterable[ValueBundle] | Mapping[str, ValueBundle]
+type LayoutListField = tuple[str, ShapeLike | LayoutList]
+type LayoutList = list[LayoutListField]
+type LayoutIterable = Iterable[LayoutListField]
 type MethodLayout = StructLayout | LayoutIterable
 MethodStruct: TypeAlias = "View[StructLayout]"  # defined as TypeAlias because of def_method logic
 
-type NameIntDict = Mapping[str, "int | NameIntDict"]
-type NameValueDict = Mapping[str, ValueLike | "NameValueDict"]
+type NameIntDict = Mapping[str, int | NameIntDict]
+type NameValueDict = Mapping[str, ValueLike | NameValueDict]
 type ReturnDict = ValueLike | NameValueDict
 
 type ROGraph[T] = Mapping[T, Iterable[T]]
