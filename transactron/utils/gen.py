@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field, asdict
 from dataclasses_json import dataclass_json
-from typing import Iterable, Optional, TypeAlias
+from collections.abc import Iterable
 
 from amaranth import *
 from amaranth.back import verilog
@@ -27,13 +27,13 @@ if TYPE_CHECKING:
 
 
 __all__ = [
-    "MetricLocation",
     "GeneratedLog",
     "GenerationInfo",
+    "MetricLocation",
     "generate_verilog",
 ]
 
-SignalHandle: TypeAlias = list[str]
+type SignalHandle = list[str]
 """The location of a signal is a list of Verilog identifiers that denote a path
 consisting of module names (and the signal name at the end) leading
 to the signal wire."""
@@ -139,7 +139,7 @@ class GenerationInfo:
         """
         Loads the generation information from a JSON file.
         """
-        with open(file_name, "r") as fp:
+        with open(file_name) as fp:
             return GenerationInfo.from_json(fp.read())  # type: ignore
 
 
@@ -232,7 +232,7 @@ class VerilogDebugWrapper(Elaboratable):
         self.elaboratable = elaboratable
         self.records: list[SignalLogRecord] = []
         self.evlog_records: list[tuple[EmittedEvent, Signal, list[Signal]]] = []
-        self.evlog_triggers: Optional[Signal] = None
+        self.evlog_triggers: Signal | None = None
 
     def elaborate(self, platform):
         m = Module()
@@ -306,9 +306,9 @@ class VerilogDebugWrapper(Elaboratable):
 
 def generate_verilog(
     elaboratable: Elaboratable,
-    ports: Optional[list[Value]] = None,
+    ports: list[Value] | None = None,
     top_name: str = "top",
-    platform: Optional[Platform] = None,
+    platform: Platform | None = None,
     *,
     enable_hacks: Iterable[str] = {},
 ) -> tuple[str, GenerationInfo]:

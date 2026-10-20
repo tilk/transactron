@@ -1,4 +1,3 @@
-from typing import Optional
 from amaranth import *
 from amaranth.hdl import ValueCastable
 from .typing import DebugBundle, HasDebugSignals
@@ -17,7 +16,7 @@ def auto_debug_signals(thing) -> DebugBundle:
     use in ``gtkwave``.
     """
 
-    def auto_debug_signals_internal(thing, *, _visited: set) -> Optional[DebugBundle]:
+    def auto_debug_signals_internal(thing, *, _visited: set) -> DebugBundle | None:
         # Please note, that the set `_visited` is used to memorise visited elements
         # to break reference cycles. There is only one instance of this set, for whole
         # `auto_debug_signals` recursion stack. It is being mutated by adding to it more
