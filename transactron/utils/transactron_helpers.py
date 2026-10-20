@@ -1,8 +1,8 @@
 import os
 import sys
 from contextlib import contextmanager
-from typing import Any, Concatenate, TypeGuard
-from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Concatenate, TypeIs
+from collections.abc import Callable, Mapping, Sequence, Iterable
 from .typing import ROGraph, GraphCC, MethodLayout, MethodStruct, LayoutList, LayoutListField
 from amaranth_types import SrcLoc, ShapeLike
 from inspect import Parameter, signature
@@ -15,6 +15,7 @@ import dataclasses
 
 
 __all__ = [
+    "NestedCollection",
     "SrcLoc",
     "async_mock_def_helper",
     "dataclass_asdict",
@@ -23,11 +24,13 @@ __all__ = [
     "from_method_layout",
     "get_caller_class_name",
     "get_src_loc",
+    "is_nested_collection",
     "local_src_loc",
     "longest_common_prefix",
     "make_layout",
     "method_def_helper",
     "mock_def_helper",
+    "nested_collection_items",
     "silence_mustuse",
 ]
 
@@ -77,9 +80,7 @@ def longest_common_prefix[T](*seqs: Sequence[T]) -> Sequence[T]:
     return min(seqs, key=lambda s: len(s))
 
 
-def has_first_param[T, U](
-    func: Callable[..., T], name: str, tp: type[U]
-) -> TypeGuard[Callable[Concatenate[U, ...], T]]:
+def has_first_param[T, U](func: Callable[..., T], name: str, tp: type[U]) -> TypeIs[Callable[Concatenate[U, ...], T]]:
     parameters = signature(func).parameters
     return (
         len(parameters) >= 1
@@ -182,3 +183,27 @@ def dataclass_asdict(obj: Any) -> dict[str, Any]:
     # Workaround for dataclass.asdict calling deepcopy without a reason, see:
     # https://github.com/python/cpython/issues/88071
     return {field.name: getattr(obj, field.name) for field in dataclasses.fields(obj)}
+
+
+type NestedCollection[T] = T | list["NestedCollection[T]"] | dict[str, "NestedCollection[T]"]
+
+
+def is_nested_collection[T](cont: Any, *t: type[T]) -> TypeIs[NestedCollection[T]]:
+    if isinstance(cont, (list, dict)):
+        if isinstance(cont, dict):
+            cont = cont.values()
+        return all(is_nested_collection(elem, *t) for elem in cont)
+    elif isinstance(cont, t):
+        return True
+    else:
+        return False
+
+
+def nested_collection_items[T](collection: NestedCollection[T]) -> Iterable[tuple[tuple[int | str, ...], T]]:
+    if isinstance(collection, (list, dict)):
+        items = collection.items() if isinstance(collection, dict) else enumerate(collection)
+        for idx, elem in items:
+            for key, val in nested_collection_items(elem):
+                yield ((idx, *key), val)
+    else:
+        yield ((), collection)
