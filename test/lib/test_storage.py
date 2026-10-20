@@ -110,8 +110,11 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
                     await sim.tick()
                     await sim.delay(5e-9)
                 addr = next(iter(self.memory.keys()))
-                del self.memory[addr]
                 await self.circ.remove.call(sim, addr=dict(addr))
+                # Update the model only after the removal takes effect, like in generic_process,
+                # so that reads and writes in the same cycle still see the entry.
+                await sim.delay(10e-9)
+                del self.memory[addr]
 
         return process
 
