@@ -110,8 +110,11 @@ class TestContentAddressableMemory(TestCaseWithSimulator):
                     await sim.tick()
                     await sim.delay(5e-9)
                 addr = next(iter(self.memory.keys()))
-                del self.memory[addr]
                 await self.circ.remove.call(sim, addr=dict(addr))
+                # Update the model only after the removal takes effect, like in generic_process,
+                # so that reads and writes in the same cycle still see the entry.
+                await sim.delay(10e-9)
+                del self.memory[addr]
 
         return process
 
@@ -164,9 +167,10 @@ bank_shapes = [
 
 
 class TestMemoryBank(TestCaseWithSimulator):
-    test_conf = [(9, 3, 3, 3, 14), (16, 1, 1, 3, 15), (16, 1, 1, 1, 16), (12, 3, 1, 1, 17), (9, 0, 0, 0, 18)]
-
-    @pytest.mark.parametrize("max_addr, writer_rand, reader_req_rand, reader_resp_rand, seed", test_conf)
+    @pytest.mark.parametrize(
+        "max_addr, writer_rand, reader_req_rand, reader_resp_rand, seed",
+        [(9, 3, 3, 3, 14), (16, 1, 1, 3, 15), (16, 1, 1, 1, 16), (12, 3, 1, 1, 17), (9, 0, 0, 0, 18)],
+    )
     @pytest.mark.parametrize("transparent", [False, True])
     @pytest.mark.parametrize("read_on_resp", [False, True])
     @pytest.mark.parametrize("read_ports", [1, 4])

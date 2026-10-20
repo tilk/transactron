@@ -1,6 +1,5 @@
 import pytest
 import random
-from typing import TypeAlias
 from collections import defaultdict
 
 from amaranth import *
@@ -26,7 +25,7 @@ class RevConnect(Elaboratable):
         return self.connect
 
 
-FIFO_Like: TypeAlias = FIFO | Forwarder | Connect | RevConnect | Pipe
+type FIFO_Like = FIFO | Forwarder | Connect | RevConnect | Pipe
 
 
 class TestFifoBase(TestCaseWithSimulator):

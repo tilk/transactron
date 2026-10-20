@@ -2,7 +2,6 @@ import re
 import logging
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import TypeAlias
 
 from amaranth import *
 from amaranth_types import ModuleLike, ValueLike
@@ -12,20 +11,20 @@ from transactron.utils.dependencies import DependencyContext, ListKey
 
 
 __all__ = [
-    "LogLevel",
-    "LogChunkInfo",
-    "LogRecordInfo",
-    "LogRecord",
-    "LogKey",
     "HardwareLogger",
-    "top_assertion",
+    "LogChunkInfo",
+    "LogKey",
+    "LogLevel",
+    "LogRecord",
+    "LogRecordInfo",
     "assertion",
     "get_log_records",
     "get_trigger_bit",
+    "top_assertion",
 ]
 
 
-LogLevel: TypeAlias = int
+type LogLevel = int
 
 
 @dataclass_json
