@@ -111,7 +111,7 @@ ignore-names = ["OneHotCase", "OneHotSwitch", "OneHotSwitchDynamic"]
 
 [tool.pytest.ini_options]
 minversion = "7.2.2"
-testpaths = "tests"
+testpaths = "test"
 norecursedirs = ['*.egg', '.*', 'build', 'dist', 'venv', '__traces__', '__pycache__']
 filterwarnings = [
     "ignore:cannot collect test class 'TestbenchContext':pytest.PytestCollectionWarning",
