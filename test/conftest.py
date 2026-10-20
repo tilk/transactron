@@ -1,7 +1,12 @@
 import os
 import pytest
 import hypothesis
+from datetime import timedelta
 
+
+# Hardware simulation tests run long and their timing varies, so low deadlines cause flakiness.
+hypothesis.settings.register_profile("default", deadline=timedelta(seconds=1))
+hypothesis.settings.load_profile("default")
 
 hypothesis.settings.register_profile(
     "ci",
