@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import TypeAlias, cast, TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 from collections.abc import Sequence, Iterable, Mapping
 from amaranth import *
 from amaranth.hdl import ValueCastable
@@ -24,8 +24,8 @@ class AssignType(Enum):
     ALL = 4
 
 
-AssignFields: TypeAlias = AssignType | Iterable[str | int] | Mapping[str | int, "AssignFields"]
-AssignArg: TypeAlias = ValueLike | Mapping[str, "AssignArg"] | Mapping[int, "AssignArg"] | Sequence["AssignArg"]
+type AssignFields = AssignType | Iterable[str | int] | Mapping[str | int, "AssignFields"]
+type AssignArg = ValueLike | Mapping[str, "AssignArg"] | Mapping[int, "AssignArg"] | Sequence["AssignArg"]
 
 
 def arrayproxy_fields(proxy: ArrayProxy) -> set[str | int] | None:

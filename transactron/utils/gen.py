@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field, asdict
 from dataclasses_json import dataclass_json
-from typing import TypeAlias
 from collections.abc import Iterable
 
 from amaranth import *
@@ -34,7 +33,7 @@ __all__ = [
     "generate_verilog",
 ]
 
-SignalHandle: TypeAlias = list[str]
+type SignalHandle = list[str]
 """The location of a signal is a list of Verilog identifiers that denote a path
 consisting of module names (and the signal name at the end) leading
 to the signal wire."""

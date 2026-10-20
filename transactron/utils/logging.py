@@ -2,7 +2,6 @@ import re
 import logging
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import TypeAlias
 
 from amaranth import *
 from amaranth_types import ModuleLike, ValueLike
@@ -25,7 +24,7 @@ __all__ = [
 ]
 
 
-LogLevel: TypeAlias = int
+type LogLevel = int
 
 
 @dataclass_json
