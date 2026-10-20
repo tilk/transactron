@@ -32,8 +32,8 @@ class MethodDir(enum.Enum):
 
 
 _T = TypeVar("_T")
-Provided: TypeAlias = Annotated[_T, MethodDir.PROVIDED]
-Required: TypeAlias = Annotated[_T, MethodDir.REQUIRED]
+Provided: TypeAlias = Annotated[_T, MethodDir.PROVIDED]  # noqa: UP040
+Required: TypeAlias = Annotated[_T, MethodDir.REQUIRED]  # noqa: UP040
 
 
 class Method(TransactionBase["Transaction | Method"]):
