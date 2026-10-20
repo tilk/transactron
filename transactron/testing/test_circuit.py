@@ -9,7 +9,7 @@ from transactron.lib.adapters import Adapter
 from .testbenchio import TestbenchIO
 from transactron import Method, Methods
 from transactron.lib import AdapterTrans
-from transactron.utils import ModuleConnector, auto_debug_signals, NestedCollection, guard_nested_collection
+from transactron.utils import ModuleConnector, auto_debug_signals, NestedCollection, is_nested_collection
 from amaranth_types import HasElaborate
 
 
@@ -69,7 +69,7 @@ class SimpleTestCircuit[T: HasElaborate](Elaboratable):
         for name, attr in vars(self._dut).items():
             if name in self._exclude:
                 continue
-            if guard_nested_collection(attr, Method, Methods) and attr:
+            if is_nested_collection(attr, Method, Methods) and attr:
                 if (
                     name in hints
                     and hasattr(hints[name], "__metadata__")

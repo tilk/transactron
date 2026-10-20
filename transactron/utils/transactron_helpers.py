@@ -1,7 +1,7 @@
 import os
 import sys
 from contextlib import contextmanager
-from typing import Optional, Any, Concatenate, TypeGuard
+from typing import Optional, Any, Concatenate, TypeIs
 from collections.abc import Callable, Mapping, Sequence, Iterable
 from .typing import ROGraph, GraphCC, MethodLayout, MethodStruct, LayoutList, LayoutListField
 from amaranth_types import SrcLoc, ShapeLike
@@ -30,7 +30,7 @@ __all__ = [
     "extend_layout",
     "dataclass_asdict",
     "NestedCollection",
-    "guard_nested_collection",
+    "is_nested_collection",
     "nested_collection_items",
 ]
 
@@ -80,9 +80,7 @@ def longest_common_prefix[T](*seqs: Sequence[T]) -> Sequence[T]:
     return min(seqs, key=lambda s: len(s))
 
 
-def has_first_param[T, U](
-    func: Callable[..., T], name: str, tp: type[U]
-) -> TypeGuard[Callable[Concatenate[U, ...], T]]:
+def has_first_param[T, U](func: Callable[..., T], name: str, tp: type[U]) -> TypeIs[Callable[Concatenate[U, ...], T]]:
     parameters = signature(func).parameters
     return (
         len(parameters) >= 1
@@ -190,11 +188,11 @@ def dataclass_asdict(obj: Any) -> dict[str, Any]:
 type NestedCollection[T] = T | list["NestedCollection[T]"] | dict[str, "NestedCollection[T]"]
 
 
-def guard_nested_collection[T](cont: Any, *t: type[T]) -> TypeGuard[NestedCollection[T]]:
+def is_nested_collection[T](cont: Any, *t: type[T]) -> TypeIs[NestedCollection[T]]:
     if isinstance(cont, (list, dict)):
         if isinstance(cont, dict):
             cont = cont.values()
-        return all(guard_nested_collection(elem, *t) for elem in cont)
+        return all(is_nested_collection(elem, *t) for elem in cont)
     elif isinstance(cont, t):
         return True
     else:
