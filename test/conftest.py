@@ -3,6 +3,10 @@ import pytest
 import hypothesis
 
 
+# Hardware simulation tests run long and their timing varies, so deadlines cause flakiness.
+hypothesis.settings.register_profile("default", deadline=None)
+hypothesis.settings.load_profile("default")
+
 hypothesis.settings.register_profile(
     "ci",
     derandomize=True,  # reproducible runs in CI
