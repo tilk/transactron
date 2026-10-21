@@ -135,7 +135,7 @@ def def_method_mock(
 
     Parameters
     ----------
-    tb_getter : Callable[[], TestbenchIO] | Callable[[Any], TestbenchIO]
+    tb_getter : TestbenchIO | Callable[[], TestbenchIO] | Callable[[Any], TestbenchIO]
         Function to get the TestbenchIO of the mocked method.
     enable : Callable[[], bool] | Callable[[Any], bool]
         Function which decides if the method is enabled in a given clock cycle.
@@ -149,7 +149,7 @@ def def_method_mock(
     Example
     -------
     ```
-    @def_method_mock(lambda: m.target[k])
+    @def_method_mock(m.target[k])
     def process(arg):
         return {"data": arg["data"] + k}
     ```
@@ -200,7 +200,7 @@ def def_method_mocks(
     Example
     -------
     ```
-    @def_method_mock(lambda: m.target)
+    @def_method_mocks(m.target)
     def process(k, arg):
         return {"data": arg["data"] + k}
     ```
