@@ -87,7 +87,7 @@ class AdapterTrans(AdapterBase):
             Alternatively, the source location to use instead of the default.
         """
         src_loc = get_src_loc(src_loc)
-        adapter = AdapterTrans(i=method.layout_in, o=method.layout_out, src_loc=src_loc)
+        adapter = AdapterTrans(name=method.name, i=method.layout_in, o=method.layout_out, src_loc=src_loc)
         adapter.iface.provide(method)
         return adapter
 
@@ -178,7 +178,7 @@ class Adapter(AdapterBase):
             See `transactron.core.Method.body` for parameters description.
         """
         src_loc = get_src_loc(src_loc)
-        adapter = Adapter(i=method.layout_in, o=method.layout_out, src_loc=src_loc, **kwargs)
+        adapter = Adapter(name=method.name, i=method.layout_in, o=method.layout_out, src_loc=src_loc, **kwargs)
         method.provide(adapter.iface)
         return adapter
 
