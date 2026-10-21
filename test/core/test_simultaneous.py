@@ -210,7 +210,7 @@ class TestTransitivity(TestCaseWithSimulator):
 
         result: int | None
 
-        @def_method_mock(lambda: target)
+        @def_method_mock(target)
         def target_process(data: int):
             @MethodMock.effect
             def eff():

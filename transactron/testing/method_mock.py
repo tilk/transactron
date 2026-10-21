@@ -108,7 +108,7 @@ class MethodMock:
 
 
 def def_method_mock(
-    tb_getter: Callable[[], TestbenchIO] | Callable[[Any], TestbenchIO], **kwargs
+    tb_getter: TestbenchIO | Callable[[], TestbenchIO] | Callable[[Any], TestbenchIO], **kwargs
 ) -> Callable[[Callable[..., NameIntDict | None]], Callable[[], MethodMock]]:
     """
     Decorator function to create method mock handlers. It should be applied on
@@ -165,7 +165,7 @@ def def_method_mock(
         @functools.wraps(func)
         def mock(func_self=None, /) -> MethodMock:
             f = func
-            getter: Any = tb_getter
+            getter: Any = tb_getter if isinstance(tb_getter, Callable) else lambda: tb_getter
             kw = kwargs
             if func_self is not None:
                 getter = getter.__get__(func_self)
@@ -185,7 +185,10 @@ def def_method_mock(
 
 
 def def_method_mocks(
-    tb_getter: Callable[[], NestedCollection[TestbenchIO]] | Callable[[Any], NestedCollection[TestbenchIO]], **kwargs
+    tb_getter: TestbenchIO
+    | Callable[[], NestedCollection[TestbenchIO]]
+    | Callable[[Any], NestedCollection[TestbenchIO]],
+    **kwargs,
 ) -> Callable[[Callable[..., NameIntDict | None]], Callable[[], list[MethodMock]]]:
     """
     Decorator function for defining multiple method mocks for similar function
@@ -213,7 +216,7 @@ def def_method_mocks(
         @functools.wraps(func)
         def mock(func_self=None, /) -> list[MethodMock]:
             f = func
-            getter: Any = tb_getter
+            getter: Any = tb_getter if isinstance(tb_getter, Callable) else lambda: tb_getter
             kw = kwargs
             if func_self is not None:
                 getter = getter.__get__(func_self)
