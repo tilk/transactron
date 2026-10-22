@@ -57,7 +57,7 @@ class TestCondition(TestCaseWithSimulator):
 
         selection: int | None
 
-        @def_method_mock(lambda: target)
+        @def_method_mock(target)
         def target_process(cond):
             @MethodMock.effect
             def eff():
