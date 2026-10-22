@@ -11,7 +11,7 @@ from .testbenchio import TestbenchIO
 from transactron.utils.typing import NameIntDict
 
 
-__all__ = ["MethodMock", "def_method_mock"]
+__all__ = ["MethodMock", "def_method_mock", "def_method_mocks"]
 
 
 class MethodMock:
@@ -149,13 +149,13 @@ def def_method_mock(
     Example
     -------
     ```
-    @def_method_mock(m.target[k])
+    @def_method_mock(m.target)
     def process(arg):
         return {"data": arg["data"] + k}
     ```
     or for class methods
     ```
-    @def_method_mock(lambda self: self.target[k])
+    @def_method_mock(lambda self: self.target)
     def process(self, data):
         return {"data": data + k}
     ```
@@ -206,7 +206,7 @@ def def_method_mocks(
     ```
     or for class methods
     ```
-    @def_method_mock(lambda self: self.target)
+    @def_method_mocks(lambda self: self.target)
     def process(self, k, data):
         return {"data": data + k}
     ```
