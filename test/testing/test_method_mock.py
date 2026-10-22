@@ -138,7 +138,7 @@ class TestMethodMocks(TestCaseWithSimulator):
 
         return process
 
-    @def_method_mocks(lambda self: self.dut.method, enable=lambda _: random.randint(0, 1))
+    @def_method_mocks(lambda self: self.dut.method, enable=lambda self, k: random.randint(0, 1))
     def method_mock(self, k, input):
         return {"output": input + k}
 
@@ -147,6 +147,35 @@ class TestMethodMocks(TestCaseWithSimulator):
         self.count = 3
         self.width = 10
         self.dut = SimpleTestCircuit(SimpleMethodMocksTestCircuit(self.count, self.width))
+
+        with self.run_simulation(self.dut) as sim:
+            for k in range(self.count):
+                sim.add_testbench(self.make_process(k))
+
+
+class TestMethodMocksEnable(TestCaseWithSimulator):
+    def make_process(self, k: int):
+        async def process(sim: TestbenchContext):
+            for _ in range(20):
+                val = random.randrange(2**self.width)
+                ret = await self.dut.wrapper[k].call_try(sim, input=val)
+                if k % 2 == 0:
+                    assert ret is not None
+                    assert ret.output == (val + 2 * k) % 2**self.width
+                else:
+                    assert ret is None
+
+        return process
+
+    def test_method_mocks_enable(self):
+        random.seed(42)
+        self.count = 4
+        self.width = 10
+        self.dut = SimpleTestCircuit(SimpleMethodMocksTestCircuit(self.count, self.width))
+
+        @def_method_mocks(self.dut.method, enable=lambda k: k % 2 == 0)
+        def method_mock(k, input):
+            return {"output": input + k}
 
         with self.run_simulation(self.dut) as sim:
             for k in range(self.count):
