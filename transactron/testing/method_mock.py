@@ -195,18 +195,19 @@ def def_method_mocks(
     definitions. Should be used like ``def_method_mock``, but on lists or
     dicts of ``TestbenchIO`` objects. The decorated function will receive
     additional positional arguments depending on the index of the mocked
-    method, similar to ``def_methods``.
+    method, similar to ``def_methods``. The ``enable`` function receives the same
+    additional positional arguments.
 
     Example
     -------
     ```
-    @def_method_mocks(m.target)
+    @def_method_mocks(m.target, enable=lambda k: k % 2 == 0)
     def process(k, arg):
         return {"data": arg["data"] + k}
     ```
     or for class methods
     ```
-    @def_method_mocks(lambda self: self.target)
+    @def_method_mocks(lambda self: self.target, enable=lambda self, k: k % 2 == 0)
     def process(self, k, data):
         return {"data": data + k}
     ```
@@ -226,8 +227,13 @@ def def_method_mocks(
                     bind = getattr(v, "__get__", None)
                     kw[k] = bind(func_self) if bind else v
             tbs = getter()
+
+            def bind_key(key) -> dict[str, Any]:
+                return {k: functools.partial(v, *key) if k == "enable" else v for k, v in kw.items()}
+
             return [
-                MethodMock(tb.adapter, functools.partial(f, *key), **kw) for key, tb in nested_collection_items(tbs)
+                MethodMock(tb.adapter, functools.partial(f, *key), **bind_key(key))
+                for key, tb in nested_collection_items(tbs)
             ]
 
         mock._transactron_method_mock = 1  # type: ignore
