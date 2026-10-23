@@ -15,22 +15,19 @@ from .utils import assign, AssignType, assertion
 from .lib import condition
 
 __all__ = [
-    # core
-    "TModule",
+    "AssignType",
     "Method",
     "Methods",
+    "Priority",
+    "Provided",
+    "Required",
+    "TModule",
     "Transaction",
+    "TransactronContextComponent",
+    "TransactronContextElaboratable",
+    "assertion",
+    "assign",
+    "condition",
     "def_method",
     "def_methods",
-    "Required",
-    "Provided",
-    "Priority",
-    "TransactronContextElaboratable",
-    "TransactronContextComponent",
-    # utils
-    "assign",
-    "AssignType",
-    "assertion",
-    # lib
-    "condition",
 ]
