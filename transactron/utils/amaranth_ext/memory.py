@@ -3,7 +3,7 @@ from amaranth.utils import *
 import amaranth.lib.memory as memory
 from amaranth.hdl import AlreadyElaborated
 
-from typing import Optional, Any, final
+from typing import Any, final
 from collections.abc import Iterable
 
 from transactron.utils.amaranth_ext.elaboratables import OneHotMux
@@ -14,16 +14,15 @@ from .. import get_src_loc
 from amaranth_types.types import ShapeLike, ValueLike
 import amaranth_types.memory as amemory
 
-__all__ = ["MultiReadMemory", "MultiportXORMemory", "MultiportXORILVTMemory", "MultiportOneHotILVTMemory"]
+__all__ = ["MultiReadMemory", "MultiportOneHotILVTMemory", "MultiportXORILVTMemory", "MultiportXORMemory"]
 
 
 @final
-class IncorrectWritePortNumber(Exception):
+class IncorrectWritePortNumberError(Exception):
     """Exception raised when an incorrect number of write ports has been requested."""
 
 
 class ReadPort:
-
     def __init__(
         self,
         memory: "BaseMultiportMemory",
@@ -40,11 +39,10 @@ class ReadPort:
 
 
 class WritePort:
-
     def __init__(
         self,
         memory: "BaseMultiportMemory",
-        granularity: Optional[int] = None,
+        granularity: int | None = None,
         src_loc=0,
     ):
         self.src_loc = get_src_loc(src_loc)
@@ -53,7 +51,7 @@ class WritePort:
         if granularity is None:
             en_width = 1
         elif not isinstance(granularity, int) or granularity <= 0:
-            raise TypeError(f"Granularity must be a positive integer or None, " f"not {granularity!r}")
+            raise TypeError(f"Granularity must be a positive integer or None, not {granularity!r}")
         elif shape.signed:
             raise ValueError("Granularity cannot be specified for a memory with a signed shape")
         elif shape.width % granularity != 0:
@@ -76,7 +74,7 @@ class BaseMultiportMemory(Elaboratable):
         shape: ShapeLike,
         depth: int,
         init: Iterable[ValueLike],
-        attrs: Optional[dict[str, str]] = None,
+        attrs: dict[str, str] | None = None,
         src_loc_at: int = 0,
     ):
         """
@@ -113,7 +111,7 @@ class BaseMultiportMemory(Elaboratable):
             src_loc=1 + src_loc_at,
         )
 
-    def write_port(self, *, domain: str = "sync", granularity: Optional[int] = None, src_loc_at: int = 0):
+    def write_port(self, *, domain: str = "sync", granularity: int | None = None, src_loc_at: int = 0):
         if self._frozen:
             raise AlreadyElaborated("Cannot add a memory port to a memory that has already been elaborated")
         if domain != "sync":
@@ -134,9 +132,9 @@ class MultiReadMemory(BaseMultiportMemory):
 
     """
 
-    def write_port(self, *, domain: str = "sync", granularity: Optional[int] = None, src_loc_at: int = 0):
+    def write_port(self, *, domain: str = "sync", granularity: int | None = None, src_loc_at: int = 0):
         if self.write_ports:
-            raise IncorrectWritePortNumber("Cannot add multiple write ports to a single write memory")
+            raise IncorrectWritePortNumberError("Cannot add multiple write ports to a single write memory")
         return super().write_port(domain=domain, granularity=granularity, src_loc_at=src_loc_at)
 
     def elaborate(self, platform):
@@ -196,7 +194,7 @@ class MultiportXORMemory(BaseMultiportMemory):
 
     """
 
-    def write_port(self, *, domain: str = "sync", granularity: Optional[int] = None, src_loc_at: int = 0):
+    def write_port(self, *, domain: str = "sync", granularity: int | None = None, src_loc_at: int = 0):
         if granularity is not None:
             raise ValueError("Granularity is not supported.")
         return super().write_port(domain=domain, granularity=granularity, src_loc_at=src_loc_at)
@@ -209,8 +207,8 @@ class MultiportXORMemory(BaseMultiportMemory):
         write_xors = [Value.cast(0) for _ in self.write_ports]
         read_xors = [Value.cast(0) for _ in self.read_ports]
 
-        write_regs_addr = [Signal(range(self.depth)) for _ in self.write_ports]
-        write_regs_data = [Signal(self.shape) for _ in self.write_ports]
+        write_regs_addr = [Signal(range(self.depth), reset_less=True) for _ in self.write_ports]
+        write_regs_data = [Signal(self.shape, reset_less=True) for _ in self.write_ports]
         read_en_bypass = [Signal() for _ in self.read_ports]
 
         # feedback ports
@@ -260,8 +258,8 @@ class MultiportXORMemory(BaseMultiportMemory):
 
             m.d.sync += [r_write_port.addr.eq(write_port.addr), r_write_port.en.eq(write_port.en)]
 
-            write_addr_bypass = Signal(range(self.depth))
-            write_data_bypass = Signal(self.shape)
+            write_addr_bypass = Signal(range(self.depth), reset_less=True)
+            write_data_bypass = Signal(self.shape, reset_less=True)
             write_en_bypass = Signal()
             m.d.sync += [
                 write_addr_bypass.eq(write_regs_addr[index]),
@@ -270,7 +268,7 @@ class MultiportXORMemory(BaseMultiportMemory):
             ]
 
             for idx, port in enumerate(r_read_ports):
-                read_addr_bypass = Signal(range(self.depth))
+                read_addr_bypass = Signal(range(self.depth), reset_less=True)
 
                 m.d.sync += [
                     read_addr_bypass.eq(self.read_ports[idx].addr),
@@ -295,7 +293,7 @@ class MultiportXORMemory(BaseMultiportMemory):
                 m.d.comb += [port.addr.eq(self.read_ports[idx].addr), port.en.eq(self.read_ports[idx].en)]
 
         for index, port in enumerate(self.read_ports):
-            sync_data = Signal.like(port.data)
+            sync_data = Signal.like(port.data, reset_less=True)
             m.d.sync += sync_data.eq(port.data)
             m.d.comb += [port.data.eq(Mux(read_en_bypass[index], read_xors[index], sync_data))]
 
@@ -314,7 +312,7 @@ class OneHotCodedILVT(BaseMultiportMemory):
 
     """
 
-    def write_port(self, *, domain: str = "sync", granularity: Optional[int] = None, src_loc_at: int = 0):
+    def write_port(self, *, domain: str = "sync", granularity: int | None = None, src_loc_at: int = 0):
         if granularity is not None:
             raise ValueError("Granularity is not supported.")
         return super().write_port(domain=domain, granularity=granularity, src_loc_at=src_loc_at)
@@ -325,17 +323,17 @@ class OneHotCodedILVT(BaseMultiportMemory):
         self._frozen = True
 
         if Shape(len(self.write_ports)) != self.shape:
-            raise IncorrectWritePortNumber("Number of write ports not equal to ILVT's shape.")
+            raise IncorrectWritePortNumberError("Number of write ports not equal to ILVT's shape.")
 
-        write_addr_sync = [Signal(port.addr.shape()) for port in self.write_ports]
+        write_addr_sync = [Signal(port.addr.shape(), reset_less=True) for port in self.write_ports]
         write_en_sync = [Signal() for _ in self.write_ports]
-        write_data_sync = [Signal(self.shape) for _ in self.write_ports]
+        write_data_sync = [Signal(self.shape, reset_less=True) for _ in self.write_ports]
 
-        write_addr_bypass = [Signal(port.addr.shape()) for port in self.write_ports]
+        write_addr_bypass = [Signal(port.addr.shape(), reset_less=True) for port in self.write_ports]
         write_en_bypass = [Signal() for _ in self.write_ports]
-        write_data_bypass = [Signal(self.shape) for _ in self.write_ports]
+        write_data_bypass = [Signal(self.shape, reset_less=True) for _ in self.write_ports]
 
-        read_addr_bypass = [Signal(port.addr.shape()) for port in self.read_ports]
+        read_addr_bypass = [Signal(port.addr.shape(), reset_less=True) for port in self.read_ports]
         read_en_bypass = [Signal() for _ in self.read_ports]
 
         bypassed_data = [[Signal(len(self.write_ports) - 1) for _ in self.write_ports] for _ in self.read_ports]
@@ -399,7 +397,7 @@ class OneHotCodedILVT(BaseMultiportMemory):
                 (
                     ~(m.submodules[f"bank_{i}"].read_ports[idx - 1].data[index - 1])
                     if i < index
-                    else m.submodules[f"bank_{i+1}"].read_ports[idx].data[index]
+                    else m.submodules[f"bank_{i + 1}"].read_ports[idx].data[index]
                 )
                 for i in range(len(self.write_ports) - 1)
             ]
@@ -410,7 +408,6 @@ class OneHotCodedILVT(BaseMultiportMemory):
             m.d.sync += write_data_bypass[index].eq(write_data_sync[index])
 
         for index, read_port in enumerate(self.read_ports):
-
             for i in range(len(self.write_ports)):
                 m.d.comb += bypassed_data[index][i].eq(
                     Mux(
@@ -455,7 +452,7 @@ class MultiportILVTMemory(BaseMultiportMemory):
         shape: ShapeLike,
         depth: int,
         init: Iterable[ValueLike],
-        attrs: Optional[dict[str, str]] = None,
+        attrs: dict[str, str] | None = None,
         src_loc_at: int = 0,
         memory_type: amemory.AbstractMemoryConstructor[ShapeLike, Value] = memory.Memory,
     ):
@@ -485,8 +482,8 @@ class MultiportILVTMemory(BaseMultiportMemory):
         ilvt_write_ports = [ilvt.write_port() for _ in self.write_ports]
         ilvt_read_ports = [ilvt.read_port() for _ in self.read_ports]
 
-        write_addr_bypass = [Signal(port.addr.shape()) for port in self.write_ports]
-        write_data_bypass = [Signal(self.shape) for _ in self.write_ports]
+        write_addr_bypass = [Signal(port.addr.shape(), reset_less=True) for port in self.write_ports]
+        write_data_bypass = [Signal(self.shape, reset_less=True) for _ in self.write_ports]
         write_en_bypass = [Signal(port.en.shape()) for port in self.write_ports]
 
         m.d.sync += [write_addr_bypass[index].eq(port.addr) for index, port in enumerate(self.write_ports)]
@@ -527,7 +524,7 @@ class MultiportILVTMemory(BaseMultiportMemory):
             m.d.comb += [ilvt_read_ports[index].addr.eq(read_port.addr), ilvt_read_ports[index].en.eq(read_port.en)]
 
             read_en_bypass = Signal()
-            read_addr_bypass = Signal(self.shape)
+            read_addr_bypass = Signal(self.shape, reset_less=True)
 
             m.d.sync += [read_en_bypass.eq(read_port.en), read_addr_bypass.eq(read_port.addr)]
 
@@ -552,7 +549,7 @@ class MultiportILVTMemory(BaseMultiportMemory):
             ]
             new_data = OneHotMux.create(m, mux_inputs, bank_data)
 
-            sync_data = Signal.like(read_port.data)
+            sync_data = Signal.like(read_port.data, reset_less=True)
             m.d.sync += sync_data.eq(read_port.data)
             m.d.comb += [read_port.data.eq(Mux(read_en_bypass, new_data, sync_data))]
 
@@ -586,7 +583,7 @@ class MultiportOneHotILVTMemory(MultiportILVTMemory):
         shape: ShapeLike,
         depth: int,
         init: Iterable[ValueLike],
-        attrs: Optional[dict[str, str]] = None,
+        attrs: dict[str, str] | None = None,
         src_loc_at: int = 0,
     ):
         super().__init__(
@@ -621,7 +618,7 @@ class MultiportXORILVTMemory(MultiportILVTMemory):
         shape: ShapeLike,
         depth: int,
         init: Iterable[ValueLike],
-        attrs: Optional[dict[str, str]] = None,
+        attrs: dict[str, str] | None = None,
         src_loc_at: int = 0,
     ):
         super().__init__(

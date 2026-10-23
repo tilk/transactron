@@ -11,7 +11,6 @@ from transactron import *
 from transactron.utils import MethodStruct
 from transactron.lib import *
 
-from unittest import TestCase
 
 from transactron.utils.amaranth_ext.functions import popcount
 from transactron.utils.assign import AssignArg
@@ -176,7 +175,7 @@ class AdapterCircuit(Elaboratable):
         return m
 
 
-class TestInvalidMethods(TestCase):
+class TestInvalidMethods(TestCaseWithSimulator):
     def assert_re(self, msg, m):
         with pytest.raises(RuntimeError, match=msg):
             Fragment.get(TransactronContextElaboratable(m), platform=None)
@@ -930,6 +929,52 @@ class TestNonexclusiveMultiple(TestCaseWithSimulator):
                 await sim.tick()
                 expected_count = bin(i).count("1")
                 assert sim.get(m.meth1_count) == expected_count
+
+        with self.run_simulation(dut) as sim:
+            sim.add_testbench(process)
+
+
+class ValidateArgumentsNonexclusiveCircuit(Elaboratable):
+    def __init__(self):
+        self.in1 = Signal()
+        self.in2 = Signal()
+        self.run = Signal()
+
+    def elaborate(self, platform):
+        m = TModule()
+
+        method = Method(i=[("data", 1)])
+
+        @def_method(
+            m,
+            method,
+            nonexclusive=True,
+            combiner=lambda m, args, runs: {"data": 0},
+            validate_arguments=lambda arg: arg.data == 1,
+        )
+        def _(data):
+            pass
+
+        with Transaction().body(m):
+            method(m, data=self.in1)
+            method(m, data=self.in2)
+            m.d.comb += self.run.eq(1)
+
+        return m
+
+
+class TestValidateArgumentsNonexclusive(TestCaseWithSimulator):
+    def test_validate_arguments_nonexclusive(self):
+        m = ValidateArgumentsNonexclusiveCircuit()
+        dut = SimpleTestCircuit(m)
+
+        async def process(sim):
+            for in1 in range(2):
+                for in2 in range(2):
+                    sim.set(m.in1, in1)
+                    sim.set(m.in2, in2)
+                    await sim.tick()
+                    assert sim.get(m.run) == (in1 == 1 and in2 == 1)
 
         with self.run_simulation(dut) as sim:
             sim.add_testbench(process)

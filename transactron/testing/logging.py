@@ -1,5 +1,5 @@
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import Any, ClassVar
 import logging
 import itertools
 
@@ -13,10 +13,10 @@ from .tick_count import TicksKey
 
 
 __all__ = [
-    "make_logging_process",
-    "parse_logging_level",
     "HDLLogWrapper",
     "HDLLogWrapperComponent",
+    "make_logging_process",
+    "parse_logging_level",
 ]
 
 
@@ -58,7 +58,7 @@ class _LogFormatter(logging.Formatter):
     red = "\033[0;31m"
     reset = "\033[0m"
 
-    loglevel2colour = {
+    loglevel2colour: ClassVar[dict[int, str]] = {
         logging.DEBUG: grey + "{}" + reset,
         logging.INFO: magenta + "{}" + reset,
         logging.WARNING: yellow + "{}" + reset,
@@ -155,15 +155,14 @@ class HDLLogWrapper(Elaboratable):
         for record in tlog.get_log_records(self.level, self.namespace_regexp):
             with m.If(record.trigger):
                 m.d.comb += any_trigger.eq(1)
-                format_str = (
-                    ("[{}] " if not self.print_cycle_separator else "")
-                    + f"{logging.getLevelName(record.level)} "
-                    + (f"{record.location} " if self.print_src_loc else "")
-                    + f"{record.logger_name}: "
-                    + record.format_str
+                m.d.sync += Print(
+                    Format("[{}] ", cycle) if not self.print_cycle_separator else "",
+                    f"{logging.getLevelName(record.level)} ",
+                    f"{record.location} " if self.print_src_loc else "",
+                    f"{record.logger_name}: ",
+                    record.to_amaranth_format(),
+                    sep="",
                 )
-                args = ((cycle,) if not self.print_cycle_separator else tuple()) + record.fields
-                m.d.sync += Print(Format(format_str, *args))
 
         return m
 

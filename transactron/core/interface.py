@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from .method import Method, Methods, MethodDir
 
 
-__all__ = ["Interface", "InterfacePart", "InterfaceMember", "interface"]
+__all__ = ["Interface", "InterfaceMember", "InterfacePart", "interface"]
 
 
 @final

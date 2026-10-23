@@ -1,6 +1,5 @@
 import pytest
 from itertools import product
-from typing import Optional
 from amaranth import *
 from amaranth.sim import *
 from transactron.testing.method_mock import MethodMock, def_method_mock
@@ -101,24 +100,45 @@ class TestUnsatisfiableTriangle(TestCaseWithSimulator):
 
 
 class NoSimultaneousConditionalTestCircuit(Elaboratable):
-    def __init__(self, use_enable: bool):
+    def __init__(self, use_enable: bool, deep_condition: bool):
         self.cond = Signal()
         self.method_a = Method()
         self.method_b = Method()
         self.use_enable = use_enable
+        self.deep_condition = deep_condition
 
     def elaborate(self, platform):
         m = TModule()
 
         internal_method = Method()
 
-        @def_method(m, self.method_a)
-        def _():
-            if self.use_enable:
-                self.method_b(m, enable_call=self.cond)
-            else:
-                with m.If(self.cond):
+        if self.deep_condition:
+            internal2 = Method()
+
+            @def_method(m, internal2)
+            def _():
+                with Transaction().body(m) as t:
                     self.method_b(m)
+
+                internal2.simultaneous(t)
+
+            @def_method(m, self.method_a)
+            def _():
+                if self.use_enable:
+                    internal2(m, enable_call=self.cond)
+                else:
+                    with m.If(self.cond):
+                        internal2(m)
+
+        else:
+
+            @def_method(m, self.method_a)
+            def _():
+                if self.use_enable:
+                    self.method_b(m, enable_call=self.cond)
+                else:
+                    with m.If(self.cond):
+                        self.method_b(m)
 
         empty_method(m, internal_method)
         empty_method(m, self.method_b)
@@ -130,10 +150,11 @@ class NoSimultaneousConditionalTestCircuit(Elaboratable):
 
 class TestNoSimultaneousConditional(TestCaseWithSimulator):
     @pytest.mark.parametrize("use_enable", [False, True])
-    def test_no_simultaneous_conditional(self, use_enable: bool):
+    @pytest.mark.parametrize("deep_condition", [False, True])
+    def test_no_simultaneous_conditional(self, use_enable: bool, deep_condition: bool):
         # In current implementation using simultaneous transactions with conditional calls is forbidden.
         # This may change in the future.
-        circ = SimpleTestCircuit(NoSimultaneousConditionalTestCircuit(use_enable))
+        circ = SimpleTestCircuit(NoSimultaneousConditionalTestCircuit(use_enable, deep_condition))
 
         with pytest.raises(RuntimeError):
             with self.run_simulation(circ) as _:
@@ -187,9 +208,9 @@ class TestTransitivity(TestCaseWithSimulator):
         circ = SimpleTestCircuit(TransitivityTestCircuit(target.adapter.iface, req1, req2))
         m = ModuleConnector(test_circuit=circ, target=target)
 
-        result: Optional[int]
+        result: int | None
 
-        @def_method_mock(lambda: target)
+        @def_method_mock(target)
         def target_process(data: int):
             @MethodMock.effect
             def eff():

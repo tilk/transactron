@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from inspect import Parameter, signature
-from typing import Optional, Protocol, final
+from typing import Protocol, final
 
 from amaranth import *
 from amaranth.lib.data import StructLayout
@@ -127,7 +127,7 @@ class PipelineBuilder(Elaboratable):
         self._nodes: list[PipelineBuilder._NodeInfo] = []
         self.allow_unused: bool = allow_unused
         self.allow_empty: bool = allow_empty
-        self._live_signal_shapes: dict[str, ShapeLike] = dict()
+        self._live_signal_shapes: dict[str, ShapeLike] = {}
         self._next_forwarder = None
         self._clear_methods = []
 
@@ -173,7 +173,7 @@ class PipelineBuilder(Elaboratable):
         *,
         i: MethodLayout,
         o: MethodLayout,
-        name: Optional[str] = None,
+        name: str | None = None,
         src_loc: int | SrcLoc = 0,
         **kwargs,
     ) -> Method:
@@ -247,8 +247,8 @@ class PipelineBuilder(Elaboratable):
         m: TModule,
         o: MethodLayout = (),
         *,
-        i: Optional[MethodLayout] = None,
-        name: Optional[str] = None,
+        i: MethodLayout | None = None,
+        name: str | None = None,
         src_loc: int | SrcLoc = 0,
         **kwargs,
     ) -> Callable:
@@ -287,9 +287,9 @@ class PipelineBuilder(Elaboratable):
 
         src_loc = get_src_loc(src_loc)
 
-        def decorator(func: Callable[..., Optional[AssignArg]]) -> None:
+        def decorator(func: Callable[..., AssignArg | None]) -> None:
             params = signature(func).parameters
-            i_layout_from_pipeline: dict[str, ShapeLike] = dict()
+            i_layout_from_pipeline: dict[str, ShapeLike] = {}
             va_args_type = None
             for p in params.values():
                 if p.name == "arg":
@@ -419,7 +419,7 @@ class PipelineBuilder(Elaboratable):
             A list of live variable dicts, one per node.  Each dict maps field names to their types.
         """
 
-        live: dict[str, ShapeLike] = dict()
+        live: dict[str, ShapeLike] = {}
         live_per_node: list[dict[str, ShapeLike]] = []
 
         for i in reversed(range(len(self._nodes))):
@@ -467,8 +467,8 @@ class PipelineBuilder(Elaboratable):
 
         live_types = self.get_live_signals()
 
-        read_methods: list[Optional[Method]] = [None] * len(self._nodes)
-        write_methods: list[Optional[Method]] = [None] * len(self._nodes)
+        read_methods: list[Method | None] = [None] * len(self._nodes)
+        write_methods: list[Method | None] = [None] * len(self._nodes)
 
         for i in range(len(self._nodes) - 1):
             read_methods[i + 1] = Method(name=f"{i}_pipeline_read", o=live_types[i].items())
@@ -486,7 +486,7 @@ class PipelineBuilder(Elaboratable):
 
             @def_method(m, stage_method, ready=node.ready)
             def _(arg):
-                in_data = read_method(m) if read_method is not None else dict()
+                in_data = read_method(m) if read_method is not None else {}
                 out_data = Signal(out_layout)
                 if out_layout.members:
                     m.d.top_comb += assign(out_data, in_data, fields=AssignType.LHS)
@@ -526,7 +526,7 @@ class PipelineBuilder(Elaboratable):
 
             clear_methods.append(fwd.clear)
 
-        @def_method(m, self.clear)
+        @def_method(m, self.clear, nonexclusive=True)
         def _():
             for clear_method in clear_methods:
                 _ = clear_method(m)

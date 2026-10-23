@@ -2,11 +2,13 @@ from amaranth.lib.data import StructLayout
 from amaranth import *
 from amaranth import tracer
 from amaranth_types import SrcLoc, ValueLike
-from typing import TYPE_CHECKING, Optional, Iterator
+from typing import TYPE_CHECKING, Optional
+from collections.abc import Iterator
 
 from transactron.utils.typing import ValueBundle
 from transactron.utils.dependencies import DependencyContext
 from transactron.utils.transactron_helpers import get_caller_class_name, get_src_loc
+from transactron.utils.logging import HardwareLogger
 from .keys import *
 from contextlib import contextmanager
 from .body import Body, TBody
@@ -61,7 +63,7 @@ class Transaction(TransactionBase["Transaction | Method"]):
 
     _body_ptr: Optional["Body"] = None
 
-    def __init__(self, *, name: Optional[str] = None, src_loc: int | SrcLoc = 0):
+    def __init__(self, *, name: str | None = None, src_loc: int | SrcLoc = 0):
         """
         Parameters
         ----------
@@ -132,8 +134,23 @@ class Transaction(TransactionBase["Transaction | Method"]):
             with m.AvoidedIf(impl.run):
                 yield self
 
+    @contextmanager
+    def always_body(
+        self,
+        m: TModule,
+        log: HardwareLogger | None = None,
+        *,
+        ready: ValueLike = C(1),
+    ) -> Iterator["Transaction"]:
+        log = log or HardwareLogger("global")
+
+        with self.body(m, ready=ready) as t:
+            yield t
+
+        log.assertion(m, ~self.ready | self.run, f"Transaction '{self.name}' was not run", src_loc=self.src_loc)
+
     def __repr__(self) -> str:
-        return "(transaction {})".format(self.name)
+        return f"(transaction {self.name})"
 
     def debug_signals(self) -> ValueBundle:
         return [self.ready, self.runnable, self.run]
