@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from .method import Method, Methods, MethodDir
 
 
-__all__ = ["Interface", "InterfaceMember", "InterfacePart", "interface"]
+__all__ = ["Interface", "InterfaceMember", "InterfaceMembers", "InterfacePart", "interface_members"]
 
 
 @final
@@ -15,9 +15,9 @@ class InterfaceMember:
     iface: "InterfacePart"
 
 
-# TODO: when frozendicts are introduced, use here
+# TODO: when frozendicts are introduced in Python, use here
 @final
-class Interface(Mapping[str, "InterfaceMember"]):
+class InterfaceMembers(Mapping[str, "InterfaceMember"]):
     def __init__(self, members: Iterable[tuple[str, "InterfaceMember"]]):
         self._dict = dict(members)
 
@@ -31,10 +31,10 @@ class Interface(Mapping[str, "InterfaceMember"]):
         return iter(self._dict)
 
 
-type InterfacePart = Method | Interface | Sequence["InterfacePart"] | Mapping[str, "InterfacePart"]
+type InterfacePart = Method | InterfaceMembers | Sequence["InterfacePart"] | Mapping[str, "InterfacePart"]
 
 
-def interface(obj) -> Interface:
+def interface_members(obj) -> InterfaceMembers:
     hints: dict[str, Any] = {}
     for cls in reversed(obj.__class__.__mro__):
         hints.update(inspect.get_annotations(cls, eval_str=True))
@@ -50,7 +50,7 @@ def interface(obj) -> Interface:
         elif isinstance(attr, (Method, Methods)):
             ret[name] = InterfaceMember(MethodDir.PROVIDED, interface_part(attr))
 
-    return Interface(ret.items())
+    return InterfaceMembers(ret.items())
 
 
 @overload
@@ -74,4 +74,44 @@ def interface_part(obj) -> InterfacePart:
         assert all(isinstance(key, str) for key in obj.keys())
         return {key: interface_part(elem) for (key, elem) in obj.items()}
     else:
-        return interface(obj)
+        return interface_members(obj)
+
+
+def part_provide(lhs: InterfacePart, rhs: InterfacePart):
+    if isinstance(lhs, Method) and isinstance(rhs, Method):
+        lhs.provide(rhs)
+    elif isinstance(lhs, InterfaceMembers) and isinstance(rhs, InterfaceMembers):
+        assert lhs.keys() == rhs.keys()
+        for key in lhs.keys():
+            lhs_member = lhs[key]
+            rhs_member = rhs[key]
+            if lhs_member.mdir != rhs_member.mdir:
+                raise ValueError(f'Interface members "{key}" have different directions')
+            elif lhs_member.mdir == MethodDir.PROVIDED:
+                part_provide(lhs_member.iface, rhs_member.iface)
+            else:
+                part_provide(rhs_member.iface, lhs_member.iface)
+    elif isinstance(lhs, Sequence) and isinstance(rhs, Sequence):
+        for lhs_item, rhs_item in zip(lhs, rhs, strict=True):
+            part_provide(lhs_item, rhs_item)
+    elif (
+        isinstance(lhs, Mapping)
+        and isinstance(rhs, Mapping)
+        and not isinstance(lhs, InterfaceMembers)
+        and not isinstance(rhs, InterfaceMembers)
+    ):
+        assert lhs.keys() == rhs.keys()
+        for key in lhs.keys():
+            part_provide(lhs[key], rhs[key])
+
+
+def provide(lhs, rhs):
+    part_provide(interface_part(lhs), interface_part(rhs))
+
+
+class Interface:
+    def members(self) -> InterfaceMembers:
+        return interface_members(self)
+
+    def provide(self, interface):
+        part_provide(interface_members(self), interface_members(interface))

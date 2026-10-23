@@ -5,7 +5,7 @@ from amaranth.sim import *
 from transactron.lib.adapters import Adapter, AdapterTrans
 
 from .testbenchio import TestbenchIO
-from transactron.core import interface, Interface, InterfacePart, MethodDir
+from transactron.core import interface_members, InterfaceMembers, InterfacePart, MethodDir
 from transactron.utils import ModuleConnector, auto_debug_signals, NestedCollection
 from amaranth_types import HasElaborate
 
@@ -28,7 +28,7 @@ def transform_methods_to_testbenchios(
     NestedCollection[TestbenchIO],
     ModuleConnector | TestbenchIO,
 ]:
-    if isinstance(iface, Interface):
+    if isinstance(iface, InterfaceMembers):
         ntb_dict: dict[str, NestedCollection[TestbenchIO]] = {}
         mc_dict: dict[str, HasElaborate] = {}
         for name, member in iface.items():
@@ -64,7 +64,7 @@ class SimpleTestCircuit[T: HasElaborate](Elaboratable):
         self._submodules: dict[str, HasElaborate] = {}
         self._exclude = set(exclude)
 
-        iface = interface(self._dut)
+        iface = interface_members(self._dut)
         for name, member in iface.items():
             if name in self._exclude:
                 continue
