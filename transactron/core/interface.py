@@ -1,6 +1,6 @@
 import inspect
 from collections.abc import Iterable, Sequence, Mapping
-from typing import Any, final, overload
+from typing import Any, Self, final, overload
 from dataclasses import dataclass
 from .method import Method, Methods, MethodDir
 
@@ -113,5 +113,5 @@ class Interface:
     def members(self) -> InterfaceMembers:
         return interface_members(self)
 
-    def provide(self, interface):
-        part_provide(interface_members(self), interface_members(interface))
+    def provide(self, interface: Self):
+        part_provide(self.members(), interface.members())
