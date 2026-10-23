@@ -10,6 +10,7 @@ from .method_mock import *  # noqa: F401
 from .testbenchio import *  # noqa: F401
 from .profiler import *  # noqa: F401
 from .logging import *  # noqa: F401
+from .evlog import *  # noqa: F401
 from .tick_count import *  # noqa: F401
 from .test_case import *  # noqa: F401
 
@@ -23,19 +24,19 @@ del TYPE_CHECKING
 
 
 __all__ = [
-    "TestbenchContext",
-    "ProcessContext",
-    "SimulatorContext",
-    "TestCaseWithSimulatorBase",
-    "TestCaseWithSimulator",
-    "PysimSimulator",
     "CallTrigger",
-    "SimpleTestCircuit",
-    "TestbenchIO",
     "MethodMock",
-    "def_method_mock",
+    "ProcessContext",
+    "PysimSimulator",
+    "SimpleTestCircuit",
+    "SimulatorContext",
+    "TestCaseWithSimulator",
+    "TestCaseWithSimulatorBase",
+    "TestbenchContext",
+    "TestbenchIO",
     "data_const_to_dict",
     "data_layout",
+    "def_method_mock",
 ]
 
 

@@ -37,7 +37,7 @@ class TracingEnabler:
             mod.Instance = TracingInstance
         for class_name, modules in fragment_subclasses_to_patch:
             orig_fragment_subclass = getattr(modules[0], class_name)
-            # `type` is used to declare new class dynamicaly. There is passed `orig_fragment_subclass` as a first
+            # `type` is used to declare new class dynamically. There is passed `orig_fragment_subclass` as a first
             # base class to allow `super()` to work. Calls to `super` without arguments are syntax sugar and are
             # extended on compile/interpretation (not execution!) phase to the `super(OriginalClass, self)`,
             # so they are hardcoded on execution time to look for the original class
@@ -93,9 +93,9 @@ class TracingFragment(Fragment):
 
         def __del__(self):
             if not hasattr(self, "_tracing_original"):
-                print("Missing tracing hook:")
+                print("Missing tracing hook:")  # noqa: T201
                 for line in self.created:
-                    print(line, end="")
+                    print(line, end="")  # noqa: T201
 
     @staticmethod
     def get(obj: HasElaborate, platform) -> "TracingFragment":
@@ -120,17 +120,17 @@ class TracingFragment(Fragment):
                     new_obj = obj.elaborate(platform)
                 elif hasattr(obj, "elaborate"):
                     warnings.warn(
-                        message="Class {!r} is an elaboratable that does not explicitly inherit from "
-                        "Elaboratable; doing so would improve diagnostics".format(type(obj)),
+                        message=f"Class {type(obj)!r} is an elaboratable that does not explicitly inherit from "
+                        "Elaboratable; doing so would improve diagnostics",
                         category=RuntimeWarning,
                         stacklevel=2,
                     )
                     code = obj.elaborate.__code__
                     new_obj = obj.elaborate(platform)
                 else:
-                    raise AttributeError("Object {!r} cannot be elaborated".format(obj))
+                    raise AttributeError(f"Object {obj!r} cannot be elaborated")
                 if new_obj is obj:
-                    raise RecursionError("Object {!r} elaborates to itself".format(obj))
+                    raise RecursionError(f"Object {obj!r} elaborates to itself")
                 if new_obj is None and code is not None:
                     warnings.warn_explicit(
                         message=".elaborate() returned None; missing return statement?",

@@ -4,12 +4,14 @@ import os
 import functools
 from contextlib import contextmanager
 from collections.abc import Callable
-from typing import Concatenate, Optional
+from typing import Concatenate
 from amaranth import *
 from amaranth.sim import *
 from amaranth_types import HasElaborate
 
+from transactron.evlog import EventLog
 from transactron.utils.dependencies import DependencyContext, DependencyManager
+from .evlog import capture_evlog
 from .profiler import profiler_process, Profile
 from .logging import make_logging_process, parse_logging_level, _LogFormatter
 from .tick_count import make_tick_count_process
@@ -29,20 +31,24 @@ class TestCaseWithSimulatorBase:
         with DependencyContext(self.dependency_manager):
             yield Tick()
 
+    def _add_implicit_mock(self, sim: PysimSimulator, val) -> None:
+        if hasattr(val, "_transactron_testing_process"):
+            sim.add_process(val)
+        elif hasattr(val, "_transactron_method_mock"):
+            val = val()
+            if isinstance(val, list):
+                for mock in val:
+                    sim.add_mock(mock)
+            else:
+                sim.add_mock(val)
+
     def _add_class_mocks(self, sim: PysimSimulator) -> None:
         for key in dir(self):
-            val = getattr(self, key)
-            if hasattr(val, "_transactron_testing_process"):
-                sim.add_process(val)
-            elif hasattr(val, "_transactron_method_mock"):
-                sim.add_mock(val())
+            self._add_implicit_mock(sim, getattr(self, key))
 
     def _add_local_mocks(self, sim: PysimSimulator, frame_locals: dict) -> None:
-        for key, val in frame_locals.items():
-            if hasattr(val, "_transactron_testing_process"):
-                sim.add_process(val)
-            elif hasattr(val, "_transactron_method_mock"):
-                sim.add_mock(val())
+        for val in frame_locals.values():
+            self._add_implicit_mock(sim, val)
 
     def _add_all_mocks(self, sim: PysimSimulator, frame_locals: dict) -> None:
         self._add_class_mocks(sim)
@@ -80,6 +86,25 @@ class TestCaseWithSimulatorBase:
             profile.encode(f"{profile_dir}/{profile_file}.json")
 
     @contextmanager
+    def _configure_evlog(self):
+        log: EventLog | None = None
+        if "__TRANSACTRON_EVLOG" in os.environ:
+
+            def f():
+                nonlocal log
+                log, process = capture_evlog()
+                return process
+
+            self._transactron_sim_processes_to_add.append(f)
+
+        yield
+
+        if log is not None and log.schema.sites:
+            evlog_dir = "test/__evlogs__"
+            os.makedirs(evlog_dir, exist_ok=True)
+            log.save(f"{evlog_dir}/{self._transactron_current_output_file_name}.jsonl")
+
+    @contextmanager
     def _configure_logging(self):
         def on_error():
             assert False, "Simulation finished due to an error"
@@ -107,13 +132,14 @@ class TestCaseWithSimulatorBase:
         self._transactron_current_output_file_name = (
             self._transactron_base_output_file_name + "_" + str(self._transactron_hypothesis_iter_counter)
         )
-        self._transactron_sim_processes_to_add: list[Callable[[], Optional[Callable]]] = []
+        self._transactron_sim_processes_to_add: list[Callable[[], Callable | None]] = []
         with self._configure_dependency_context():
             self._configure_traces()
             with self._configure_profiles():
-                with self._configure_logging():
-                    self._transactron_sim_processes_to_add.append(make_tick_count_process)
-                    yield
+                with self._configure_evlog():
+                    with self._configure_logging():
+                        self._transactron_sim_processes_to_add.append(make_tick_count_process)
+                        yield
         self._transactron_hypothesis_iter_counter += 1
 
     @contextmanager

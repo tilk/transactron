@@ -5,7 +5,8 @@ from transactron.utils.transactron_helpers import get_src_loc
 from transactron.utils.typing import ReturnDict
 from ..core import *
 from ..utils import SrcLoc
-from typing import Iterable, Optional, Protocol
+from typing import Protocol
+from collections.abc import Iterable
 from collections.abc import Callable, Sequence
 from transactron.utils import (
     assign,
@@ -17,14 +18,14 @@ from .connectors import Forwarder, CrossbarConnectTrans
 from .simultaneous import condition
 
 __all__ = [
-    "Transformer",
-    "Unifier",
-    "MethodMap",
+    "Collector",
     "MethodFilter",
+    "MethodMap",
     "MethodProduct",
     "MethodTryProduct",
-    "Collector",
     "NonexclusiveWrapper",
+    "Transformer",
+    "Unifier",
 ]
 
 
@@ -78,8 +79,8 @@ class MethodMap(Elaboratable, TransformerOneTarget):
         i_layout: MethodLayout = (),
         o_layout: MethodLayout = (),
         *,
-        i_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], ReturnDict]]] = None,
-        o_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], ReturnDict]]] = None,
+        i_transform: tuple[MethodLayout, Callable[[TModule, MethodStruct], ReturnDict]] | None = None,
+        o_transform: tuple[MethodLayout, Callable[[TModule, MethodStruct], ReturnDict]] | None = None,
         src_loc: int | SrcLoc = 0,
     ):
         """
@@ -116,8 +117,8 @@ class MethodMap(Elaboratable, TransformerOneTarget):
     def create(
         target: Method,
         *,
-        i_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], ReturnDict]]] = None,
-        o_transform: Optional[tuple[MethodLayout, Callable[[TModule, MethodStruct], ReturnDict]]] = None,
+        i_transform: tuple[MethodLayout, Callable[[TModule, MethodStruct], ReturnDict]] | None = None,
+        o_transform: tuple[MethodLayout, Callable[[TModule, MethodStruct], ReturnDict]] | None = None,
         src_loc: int | SrcLoc = 0,
     ):
         """
@@ -170,7 +171,7 @@ class MethodFilter(Elaboratable, TransformerOneTarget):
         i_layout: MethodLayout,
         o_layout: MethodLayout,
         condition: Callable[[TModule, MethodStruct], ValueLike],
-        default: Optional[ReturnDict] = None,
+        default: ReturnDict | None = None,
         *,
         use_condition: bool = False,
         src_loc: int | SrcLoc = 0,
@@ -189,7 +190,7 @@ class MethodFilter(Elaboratable, TransformerOneTarget):
             The default value returned from the filtered method when the condition
             is false. If omitted, zero is returned.
         use_condition : bool
-            Instead of `m.If` use simultaneus `condition` which allow to execute
+            Instead of `m.If` use simultaneous `condition` which allow to execute
             this filter if the condition is False and target is not ready.
             When `use_condition` is true, `condition` must not be a `Method`.
         src_loc: int | SrcLoc
@@ -209,7 +210,7 @@ class MethodFilter(Elaboratable, TransformerOneTarget):
     def create(
         target: Method,
         condition: Callable[[TModule, MethodStruct], ValueLike],
-        default: Optional[ReturnDict] = None,
+        default: ReturnDict | None = None,
         *,
         use_condition: bool = False,
         src_loc: int | SrcLoc = 0,
@@ -273,7 +274,7 @@ class MethodProduct(Elaboratable, Unifier):
         self,
         i_layout: MethodLayout = (),
         o_layouts: Iterable[MethodLayout] = (),
-        combiner: Optional[tuple[MethodLayout, Callable[[TModule, list[MethodStruct]], ReturnDict]]] = None,
+        combiner: tuple[MethodLayout, Callable[[TModule, list[MethodStruct]], ReturnDict]] | None = None,
         *,
         src_loc: int | SrcLoc = 0,
     ):
@@ -303,7 +304,7 @@ class MethodProduct(Elaboratable, Unifier):
     @staticmethod
     def create(
         targets: Iterable[Method],
-        combiner: Optional[tuple[MethodLayout, Callable[[TModule, list[MethodStruct]], ReturnDict]]] = None,
+        combiner: tuple[MethodLayout, Callable[[TModule, list[MethodStruct]], ReturnDict]] | None = None,
         *,
         src_loc: int | SrcLoc = 0,
     ):
@@ -358,9 +359,7 @@ class MethodTryProduct(Elaboratable, Unifier):
         self,
         i_layout: MethodLayout = (),
         o_layouts: Iterable[MethodLayout] = (),
-        combiner: Optional[
-            tuple[MethodLayout, Callable[[TModule, list[tuple[Value, MethodStruct]]], ReturnDict]]
-        ] = None,
+        combiner: tuple[MethodLayout, Callable[[TModule, list[tuple[Value, MethodStruct]]], ReturnDict]] | None = None,
         *,
         src_loc: int | SrcLoc = 0,
     ):
@@ -390,9 +389,7 @@ class MethodTryProduct(Elaboratable, Unifier):
     @staticmethod
     def create(
         targets: Iterable[Method],
-        combiner: Optional[
-            tuple[MethodLayout, Callable[[TModule, list[tuple[Value, MethodStruct]]], ReturnDict]]
-        ] = None,
+        combiner: tuple[MethodLayout, Callable[[TModule, list[tuple[Value, MethodStruct]]], ReturnDict]] | None = None,
         *,
         src_loc: int | SrcLoc = 0,
     ):
@@ -530,7 +527,7 @@ class NonexclusiveWrapper(Elaboratable, TransformerOneTarget):
     def elaborate(self, platform):
         m = TModule()
 
-        @def_method(m, self.method, nonexclusive=True, combiner=Body._default_combiner)
+        @def_method(m, self.method, nonexclusive=True, combiner=Body._default_combiner(self.target.layout_in))
         def _(arg):
             return self.target(m, arg)
 

@@ -1,25 +1,26 @@
 from contextlib import contextmanager
 import functools
-from typing import Callable, Any, Optional, Unpack
+from typing import Any, Optional, Unpack
+from collections.abc import Callable
 
 from amaranth.sim._async import SimulatorContext
 from transactron.core.body import AdapterBodyParams
 from transactron.lib.adapters import Adapter, AdapterBase
-from transactron.utils.transactron_helpers import async_mock_def_helper
+from transactron.utils.transactron_helpers import async_mock_def_helper, NestedCollection, nested_collection_items
 from .testbenchio import TestbenchIO
 from transactron.utils.typing import NameIntDict
 
 
-__all__ = ["MethodMock", "def_method_mock"]
+__all__ = ["MethodMock", "def_method_mock", "def_method_mocks"]
 
 
 class MethodMock:
     def __init__(
         self,
         adapter: AdapterBase,
-        function: Callable[..., Optional[NameIntDict]],
+        function: Callable[..., NameIntDict | None],
         *,
-        validate_arguments: Optional[Callable[..., bool]] = None,
+        validate_arguments: Callable[..., bool] | None = None,
         enable: Callable[[], bool] = lambda: True,
         delay: float = 0,
         **kwargs: Unpack[AdapterBodyParams],
@@ -107,8 +108,8 @@ class MethodMock:
 
 
 def def_method_mock(
-    tb_getter: Callable[[], TestbenchIO] | Callable[[Any], TestbenchIO], **kwargs
-) -> Callable[[Callable[..., Optional[NameIntDict]]], Callable[[], MethodMock]]:
+    tb_getter: TestbenchIO | Callable[[], TestbenchIO] | Callable[[Any], TestbenchIO], **kwargs
+) -> Callable[[Callable[..., NameIntDict | None]], Callable[[], MethodMock]]:
     """
     Decorator function to create method mock handlers. It should be applied on
     a function which describes functionality which we want to invoke on method call.
@@ -134,7 +135,7 @@ def def_method_mock(
 
     Parameters
     ----------
-    tb_getter : Callable[[], TestbenchIO] | Callable[[Any], TestbenchIO]
+    tb_getter : TestbenchIO | Callable[[], TestbenchIO] | Callable[[Any], TestbenchIO]
         Function to get the TestbenchIO of the mocked method.
     enable : Callable[[], bool] | Callable[[Any], bool]
         Function which decides if the method is enabled in a given clock cycle.
@@ -148,23 +149,23 @@ def def_method_mock(
     Example
     -------
     ```
-    @def_method_mock(lambda: m.target[k])
+    @def_method_mock(m.target)
     def process(arg):
         return {"data": arg["data"] + k}
     ```
     or for class methods
     ```
-    @def_method_mock(lambda self: self.target[k])
+    @def_method_mock(lambda self: self.target)
     def process(self, data):
         return {"data": data + k}
     ```
     """
 
-    def decorator(func: Callable[..., Optional[NameIntDict]]) -> Callable[[], MethodMock]:
+    def decorator(func: Callable[..., NameIntDict | None]) -> Callable[[], MethodMock]:
         @functools.wraps(func)
         def mock(func_self=None, /) -> MethodMock:
             f = func
-            getter: Any = tb_getter
+            getter: Any = tb_getter if isinstance(tb_getter, Callable) else lambda: tb_getter
             kw = kwargs
             if func_self is not None:
                 getter = getter.__get__(func_self)
@@ -176,6 +177,64 @@ def def_method_mock(
             tb = getter()
             assert isinstance(tb, TestbenchIO)
             return MethodMock(tb.adapter, f, **kw)
+
+        mock._transactron_method_mock = 1  # type: ignore
+        return mock
+
+    return decorator
+
+
+def def_method_mocks(
+    tb_getter: TestbenchIO
+    | Callable[[], NestedCollection[TestbenchIO]]
+    | Callable[[Any], NestedCollection[TestbenchIO]],
+    **kwargs,
+) -> Callable[[Callable[..., NameIntDict | None]], Callable[[], list[MethodMock]]]:
+    """
+    Decorator function for defining multiple method mocks for similar function
+    definitions. Should be used like ``def_method_mock``, but on lists or
+    dicts of ``TestbenchIO`` objects. The decorated function will receive
+    additional positional arguments depending on the index of the mocked
+    method, similar to ``def_methods``. The ``enable`` function receives the same
+    additional positional arguments.
+
+    Example
+    -------
+    ```
+    @def_method_mocks(m.target, enable=lambda k: k % 2 == 0)
+    def process(k, arg):
+        return {"data": arg["data"] + k}
+    ```
+    or for class methods
+    ```
+    @def_method_mocks(lambda self: self.target, enable=lambda self, k: k % 2 == 0)
+    def process(self, k, data):
+        return {"data": data + k}
+    ```
+    """
+
+    def decorator(func: Callable[..., NameIntDict | None]) -> Callable[[], list[MethodMock]]:
+        @functools.wraps(func)
+        def mock(func_self=None, /) -> list[MethodMock]:
+            f = func
+            getter: Any = tb_getter if isinstance(tb_getter, Callable) else lambda: tb_getter
+            kw = kwargs
+            if func_self is not None:
+                getter = getter.__get__(func_self)
+                f = f.__get__(func_self)
+                kw = {}
+                for k, v in kwargs.items():
+                    bind = getattr(v, "__get__", None)
+                    kw[k] = bind(func_self) if bind else v
+            tbs = getter()
+
+            def bind_key(key) -> dict[str, Any]:
+                return {k: functools.partial(v, *key) if k == "enable" else v for k, v in kw.items()}
+
+            return [
+                MethodMock(tb.adapter, functools.partial(f, *key), **bind_key(key))
+                for key, tb in nested_collection_items(tbs)
+            ]
 
         mock._transactron_method_mock = 1  # type: ignore
         return mock

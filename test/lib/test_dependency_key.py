@@ -79,7 +79,6 @@ class UnifierKeyTestModule(Elaboratable):
 
 
 class TestDependencyKey(TestCaseWithSimulator):
-
     def test_unifier_key(self):
         m = SimpleTestCircuit(UnifierKeyTestModule())
 
@@ -141,7 +140,6 @@ class TestDependencyKey(TestCaseWithSimulator):
             pass
 
     def test_key_cache(self):
-        global combine_calls
         dm = DependencyContext.get()
         dm.add_dependency(KeyCache(), None)
         dm.add_dependency(KeyNoCache(), None)

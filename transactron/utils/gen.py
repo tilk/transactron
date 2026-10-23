@@ -1,15 +1,18 @@
 from dataclasses import dataclass, field, asdict
 from dataclasses_json import dataclass_json
-from typing import Iterable, Optional, TypeAlias
+from collections.abc import Iterable
 
 from amaranth import *
 from amaranth.back import verilog
 from amaranth.hdl import Fragment, ValueCastable
+from amaranth.build import Platform
 from amaranth_types import AbstractInterface
 
 from transactron.core import TransactionManager
 from transactron.core.keys import TransactionManagerKey
 from transactron.core.manager import MethodMap
+from transactron.evlog import EmittedEvent, EventSiteLocation, GeneratedEvLog, get_emitted_events
+from transactron.evlog.schema import schema_from_records
 from transactron.lib.metrics import HardwareMetricsManager
 from transactron.utils import logging
 from transactron.utils.dependencies import DependencyContext
@@ -24,13 +27,13 @@ if TYPE_CHECKING:
 
 
 __all__ = [
-    "MetricLocation",
     "GeneratedLog",
     "GenerationInfo",
+    "MetricLocation",
     "generate_verilog",
 ]
 
-SignalHandle: TypeAlias = list[str]
+type SignalHandle = list[str]
 """The location of a signal is a list of Verilog identifiers that denote a path
 consisting of module names (and the signal name at the end) leading
 to the signal wire."""
@@ -113,6 +116,8 @@ class GenerationInfo:
         of its registers.
     logs : list[GeneratedLog]
         Locations and metadata for all log records.
+    evlog : GeneratedEvLog
+        Event log schema and signal locations for all event emission sites.
     """
 
     metrics_location: dict[str, MetricLocation]
@@ -120,6 +125,7 @@ class GenerationInfo:
     method_signals_location: dict[int, MethodSignalsLocation]
     profile_data: ProfileData
     logs: list[GeneratedLog]
+    evlog: GeneratedEvLog
 
     def encode(self, file_name: str):
         """
@@ -133,7 +139,7 @@ class GenerationInfo:
         """
         Loads the generation information from a JSON file.
         """
-        with open(file_name, "r") as fp:
+        with open(file_name) as fp:
             return GenerationInfo.from_json(fp.read())  # type: ignore
 
 
@@ -213,14 +219,20 @@ class SignalLogRecord(logging.LogRecordInfo):
     trigger: Signal
     """Amaranth signal triggering the log."""
 
-    fields: tuple[Signal, ...] = tuple()
+    fields: tuple[Signal, ...] = ()
     """Amaranth signals that will be used to format the message."""
 
 
-class VerilogLogWrapper(Elaboratable):
+class VerilogDebugWrapper(Elaboratable):
+    """Wraps an elaboratable in order to expose debug information (log records
+    and event emission sites) as named signals locatable in the generated
+    Verilog code."""
+
     def __init__(self, elaboratable: Elaboratable):
         self.elaboratable = elaboratable
         self.records: list[SignalLogRecord] = []
+        self.evlog_records: list[tuple[EmittedEvent, Signal, list[Signal]]] = []
+        self.evlog_triggers: Signal | None = None
 
     def elaborate(self, platform):
         m = Module()
@@ -228,9 +240,12 @@ class VerilogLogWrapper(Elaboratable):
         elaboratable = Fragment.get(self.elaboratable, platform)
         m.submodules.elaboratable = elaboratable
 
-        def to_signal(val: Value | ValueCastable):
+        v = Signal(0)
+
+        def to_signal(val: Value | ValueCastable) -> Signal:
             val = Value.cast(val)
             if isinstance(val, Signal):
+                m.d.comb += v.eq(val[:0])  # force generation of `val` in Verilog
                 return val
             else:
                 sig = Signal.like(val)
@@ -243,6 +258,17 @@ class VerilogLogWrapper(Elaboratable):
             record_dict["fields"] = tuple(to_signal(val) for val in record.fields)
             self.records.append(SignalLogRecord(**record_dict))
 
+        for emitted in get_emitted_events():
+            trigger = to_signal(emitted.trigger)
+            fields = [to_signal(val) for val in emitted.fields.values()]
+            self.evlog_records.append((emitted, trigger, fields))
+
+        if self.evlog_records:
+            # A packed vector of all event triggers, so that simulators can
+            # check all emission sites with a single signal read per cycle.
+            self.evlog_triggers = Signal(len(self.evlog_records), name="evlog_triggers")
+            m.d.comb += self.evlog_triggers.eq(Cat(trigger for _, trigger, _ in self.evlog_records))
+
         return m
 
     def collect_logs(self, name_map: "SignalDict") -> list[GeneratedLog]:
@@ -254,7 +280,7 @@ class VerilogLogWrapper(Elaboratable):
             log = GeneratedLog(
                 logger_name=record.logger_name,
                 level=record.level,
-                format_str=record.format_str,
+                format_spec=record.format_spec,
                 location=record.location,
                 trigger_location=trigger_loc,
                 fields_location=fields_loc,
@@ -263,11 +289,26 @@ class VerilogLogWrapper(Elaboratable):
 
         return logs
 
+    def collect_evlog(self, name_map: "SignalDict") -> GeneratedEvLog:
+        schema = schema_from_records(emitted for emitted, _, _ in self.evlog_records)
+        site_locations = [
+            EventSiteLocation(
+                trigger=list(get_signal_location(trigger, name_map)),
+                fields=[list(get_signal_location(field, name_map)) for field in fields],
+            )
+            for _, trigger, fields in self.evlog_records
+        ]
+        triggers_location = (
+            list(get_signal_location(self.evlog_triggers, name_map)) if self.evlog_triggers is not None else None
+        )
+        return GeneratedEvLog(schema=schema, site_locations=site_locations, triggers_location=triggers_location)
+
 
 def generate_verilog(
     elaboratable: Elaboratable,
-    ports: Optional[list[Value]] = None,
+    ports: list[Value] | None = None,
     top_name: str = "top",
+    platform: Platform | None = None,
     *,
     enable_hacks: Iterable[str] = {},
 ) -> tuple[str, GenerationInfo]:
@@ -280,8 +321,8 @@ def generate_verilog(
     elif ports is None:
         raise TypeError("The `generate_verilog()` function requires a `ports=` argument")
 
-    wrapped_elaboratable = VerilogLogWrapper(elaboratable)
-    design = Fragment.get(wrapped_elaboratable, platform=None).prepare(ports=ports)
+    wrapped_elaboratable = VerilogDebugWrapper(elaboratable)
+    design = Fragment.get(wrapped_elaboratable, platform=platform).prepare(ports=ports)
 
     if "fixup_vivado_transparent_memories" in enable_hacks:
         fixup_vivado_transparent_memories(design)
@@ -290,7 +331,8 @@ def generate_verilog(
 
     transaction_manager = DependencyContext.get().get_dependency(TransactionManagerKey())
     transaction_signals, method_signals = collect_transaction_method_signals(
-        transaction_manager, name_map  # type: ignore
+        transaction_manager,
+        name_map,  # type: ignore
     )
     profile_data, _ = ProfileData.make(transaction_manager)
     gen_info = GenerationInfo(
@@ -299,6 +341,7 @@ def generate_verilog(
         method_signals_location=method_signals,
         profile_data=profile_data,
         logs=wrapped_elaboratable.collect_logs(name_map),
+        evlog=wrapped_elaboratable.collect_evlog(name_map),  # type: ignore
     )
 
     return verilog_text, gen_info

@@ -5,7 +5,7 @@ from .transformers import Unifier
 from ..utils.dependencies import *
 
 
-__all__ = ["DependencyManager", "DependencyKey", "SimpleKey", "ListKey", "UnifierKey"]
+__all__ = ["DependencyKey", "DependencyManager", "ListKey", "SimpleKey", "UnifierKey"]
 
 
 class UnifierKey(DependencyKey["Method", tuple["Method", Iterable["Unifier"]]]):
@@ -28,7 +28,7 @@ class UnifierKey(DependencyKey["Method", tuple["Method", Iterable["Unifier"]]]):
 
     def combine(self, data: list["Method"]) -> tuple["Method", Iterable["Unifier"]]:
         if len(data) == 1:
-            return data[0], tuple()
+            return data[0], ()
         else:
             unifier = self.unifier(data)
             return unifier.method, (unifier,)

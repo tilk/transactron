@@ -1,6 +1,6 @@
 from collections.abc import Iterable
 import inspect
-from typing import TypeGuard, Any
+from typing import Any
 from amaranth import *
 from amaranth.sim import *
 from transactron.core.method import MethodDir
@@ -9,73 +9,51 @@ from transactron.lib.adapters import Adapter
 from .testbenchio import TestbenchIO
 from transactron import Method, Methods
 from transactron.lib import AdapterTrans
-from transactron.utils import ModuleConnector, auto_debug_signals
+from transactron.utils import ModuleConnector, auto_debug_signals, NestedCollection, is_nested_collection
 from amaranth_types import HasElaborate
 
 
 __all__ = ["SimpleTestCircuit"]
 
 
-type _T_nested_collection[T] = T | list["_T_nested_collection[T]"] | dict[str, "_T_nested_collection[T]"]
-
-
-def guard_nested_collection[T](cont: Any, *t: type[T]) -> TypeGuard[_T_nested_collection[T]]:
-    if isinstance(cont, (list, dict)):
-        if isinstance(cont, dict):
-            cont = cont.values()
-        return all([guard_nested_collection(elem, *t) for elem in cont])
-    elif isinstance(cont, t):
-        return True
+def transform_methods_to_testbenchios(
+    adapter_type: type[Adapter] | type[AdapterTrans],
+    container: NestedCollection[Method | Methods],
+) -> tuple[
+    NestedCollection["TestbenchIO"],
+    "ModuleConnector | TestbenchIO",
+]:
+    if isinstance(container, list):
+        tb_list = []
+        mc_list = []
+        for elem in container:
+            tb, mc = transform_methods_to_testbenchios(adapter_type, elem)
+            tb_list.append(tb)
+            mc_list.append(mc)
+        return tb_list, ModuleConnector(*mc_list)
+    elif isinstance(container, dict):
+        tb_dict = {}
+        mc_dict = {}
+        for name, elem in container.items():
+            tb, mc = transform_methods_to_testbenchios(adapter_type, elem)
+            tb_dict[name] = tb
+            mc_dict[name] = mc
+        return tb_dict, ModuleConnector(*mc_dict)
+    elif isinstance(container, Methods):
+        tb_list = [TestbenchIO(adapter_type.create(method)) for method in container]
+        return list(tb_list), ModuleConnector(*tb_list)
     else:
-        return False
+        tb = TestbenchIO(adapter_type.create(container))
+        return tb, tb
 
 
 class SimpleTestCircuit[T: HasElaborate](Elaboratable):
     def __init__(self, dut: T, *, exclude: Iterable[str] = ()):
         self._dut = dut
-        self._io: dict[str, _T_nested_collection[TestbenchIO]] = {}
+        self._io: dict[str, NestedCollection[TestbenchIO]] = {}
+        self._submodules: dict[str, HasElaborate] = {}
         self._exclude = set(exclude)
 
-    def __getattr__(self, name: str) -> Any:
-        try:
-            return self._io[name]
-        except KeyError:
-            raise AttributeError(f"No mock for '{name}'")
-
-    def elaborate(self, platform):
-        def transform_methods_to_testbenchios(
-            adapter_type: type[Adapter] | type[AdapterTrans],
-            container: _T_nested_collection[Method | Methods],
-        ) -> tuple[
-            _T_nested_collection["TestbenchIO"],
-            "ModuleConnector | TestbenchIO",
-        ]:
-            if isinstance(container, list):
-                tb_list = []
-                mc_list = []
-                for elem in container:
-                    tb, mc = transform_methods_to_testbenchios(adapter_type, elem)
-                    tb_list.append(tb)
-                    mc_list.append(mc)
-                return tb_list, ModuleConnector(*mc_list)
-            elif isinstance(container, dict):
-                tb_dict = {}
-                mc_dict = {}
-                for name, elem in container.items():
-                    tb, mc = transform_methods_to_testbenchios(adapter_type, elem)
-                    tb_dict[name] = tb
-                    mc_dict[name] = mc
-                return tb_dict, ModuleConnector(*mc_dict)
-            elif isinstance(container, Methods):
-                tb_list = [TestbenchIO(adapter_type.create(method)) for method in container]
-                return list(tb_list), ModuleConnector(*tb_list)
-            else:
-                tb = TestbenchIO(adapter_type.create(container))
-                return tb, tb
-
-        m = Module()
-
-        m.submodules.dut = self._dut
         hints: dict[str, Any] = {}
         for cls in reversed(self._dut.__class__.__mro__):
             hints.update(inspect.get_annotations(cls, eval_str=True))
@@ -83,7 +61,7 @@ class SimpleTestCircuit[T: HasElaborate](Elaboratable):
         for name, attr in vars(self._dut).items():
             if name in self._exclude:
                 continue
-            if guard_nested_collection(attr, Method, Methods) and attr:
+            if is_nested_collection(attr, Method, Methods) and attr:
                 if (
                     name in hints
                     and hasattr(hints[name], "__metadata__")
@@ -94,7 +72,20 @@ class SimpleTestCircuit[T: HasElaborate](Elaboratable):
                     adapter_type = AdapterTrans
                 tb_cont, mc = transform_methods_to_testbenchios(adapter_type, attr)
                 self._io[name] = tb_cont
-                m.submodules[name] = mc
+                self._submodules[name] = mc
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return self._io[name]
+        except KeyError:
+            raise AttributeError(f"No mock for '{name}'")
+
+    def elaborate(self, platform):
+        m = Module()
+
+        m.submodules.dut = self._dut
+        for name, mc in self._submodules.items():
+            m.submodules[name] = mc
 
         return m
 

@@ -6,7 +6,8 @@ from transactron.utils import *
 from amaranth import *
 from amaranth import tracer
 from amaranth_types import ValueLike
-from typing import TYPE_CHECKING, Annotated, Optional, Iterator, TypeAlias, TypeVar, Unpack, overload
+from typing import TYPE_CHECKING, Annotated, Optional, TypeAlias, TypeVar, Unpack, overload
+from collections.abc import Iterator
 from .transaction_base import *
 from contextlib import contextmanager
 from transactron.utils.assign import AssignArg
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     from .transaction import Transaction  # noqa: F401
 
 
-__all__ = ["MethodDir", "Provided", "Required", "Method", "Methods"]
+__all__ = ["Method", "MethodDir", "Methods", "Provided", "Required"]
 
 
 class MethodDir(enum.Enum):
@@ -31,8 +32,8 @@ class MethodDir(enum.Enum):
 
 
 _T = TypeVar("_T")
-Provided: TypeAlias = Annotated[_T, MethodDir.PROVIDED]
-Required: TypeAlias = Annotated[_T, MethodDir.REQUIRED]
+Provided: TypeAlias = Annotated[_T, MethodDir.PROVIDED]  # noqa: UP040
+Required: TypeAlias = Annotated[_T, MethodDir.REQUIRED]  # noqa: UP040
 
 
 class Method(TransactionBase["Transaction | Method"]):
@@ -41,7 +42,7 @@ class Method(TransactionBase["Transaction | Method"]):
     A `Method` serves to interface a module with external `Transaction`\\s
     or `Method`\\s. It can be called by at most once in a given clock cycle.
     When a given `Method` is called by multiple `Transaction`\\s
-    (either directly, or indirectly via another `Method`) simultenaously,
+    (either directly, or indirectly via another `Method`) simultaneously,
     at most one of them is run by the `TransactionManager`, and the rest
     of them must wait. (Non-exclusive methods are an exception to this
     behavior.) Calling a `Method` always takes a single clock cycle.
@@ -77,7 +78,7 @@ class Method(TransactionBase["Transaction | Method"]):
     _body_ptr: Optional["Body | Method"] = None
 
     def __init__(
-        self, *, name: Optional[str] = None, i: MethodLayout = (), o: MethodLayout = (), src_loc: int | SrcLoc = 0
+        self, *, name: str | None = None, i: MethodLayout = (), o: MethodLayout = (), src_loc: int | SrcLoc = 0
     ):
         """
         Parameters
@@ -110,7 +111,7 @@ class Method(TransactionBase["Transaction | Method"]):
         return self.data_out.shape()
 
     @staticmethod
-    def like(other: "Method", *, name: Optional[str] = None) -> "Method":
+    def like(other: "Method", *, name: str | None = None) -> "Method":
         """Constructs a new `Method` based on another.
 
         The returned `Method` has the same input/output data layouts as the
@@ -257,7 +258,7 @@ class Method(TransactionBase["Transaction | Method"]):
         DependencyContext.get().add_dependency(DefinedMethodsKey(), self)
 
     def __call__(
-        self, m: TModule, arg: Optional[AssignArg] = None, /, enable_call: ValueLike = C(1), **kwargs: AssignArg
+        self, m: TModule, arg: AssignArg | None = None, /, enable_call: ValueLike = C(1), **kwargs: AssignArg
     ) -> MethodStruct:
         """Call a method.
 
@@ -327,7 +328,7 @@ class Method(TransactionBase["Transaction | Method"]):
         return self.data_out
 
     def __repr__(self) -> str:
-        return "(method {})".format(self.name)
+        return f"(method {self.name})"
 
     def debug_signals(self) -> ValueBundle:
         return [self.ready, self.run, self.data_in, self.data_out]
@@ -374,7 +375,7 @@ class Methods(Sequence[Method]):
             self_method.provide(method)
 
     def __call__(
-        self, m: TModule, arg: Optional[AssignArg] = None, /, enable_call: ValueLike = C(1), **kwargs: AssignArg
+        self, m: TModule, arg: AssignArg | None = None, /, enable_call: ValueLike = C(1), **kwargs: AssignArg
     ) -> MethodStruct:
         if len(self._methods) != 1:
             raise RuntimeError("calling Methods only allowed when count=1")

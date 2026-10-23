@@ -1,44 +1,45 @@
 from typing import (
-    Callable,
     Concatenate,
     Protocol,
     TypeAlias,
     cast,
     runtime_checkable,
-    Union,
     Any,
 )
+from collections.abc import Callable
 from collections.abc import Iterable, Mapping
 from amaranth import *
+from amaranth.hdl import ValueCastable
 from amaranth.lib.data import StructLayout, View
 from amaranth_types import ShapeLike, ValueLike
 
 __all__ = [
-    "MethodLayout",
-    "MethodStruct",
-    "ValueBundle",
-    "LayoutListField",
-    "LayoutList",
-    "LayoutIterable",
-    "NameIntDict",
-    "NameValueDict",
-    "ReturnDict",
-    "ROGraph",
     "Graph",
     "GraphCC",
     "HasDebugSignals",
+    "LayoutIterable",
+    "LayoutList",
+    "LayoutListField",
+    "MethodLayout",
+    "MethodStruct",
+    "NameIntDict",
+    "NameValueDict",
+    "ROGraph",
+    "ReturnDict",
+    "ValueBundle",
 ]
 
 # Internal Transactron types
-type ValueBundle = Value | View | Iterable["ValueBundle"] | Mapping[str, "ValueBundle"]
-type LayoutListField = tuple[str, "ShapeLike | LayoutList"]
-type LayoutList = list["LayoutListField"]
-type LayoutIterable = Iterable["LayoutListField"]
+type DebugBundle = Value | ValueCastable | Iterable[DebugBundle] | Mapping[str, DebugBundle]
+type ValueBundle = Value | View | Iterable[ValueBundle] | Mapping[str, ValueBundle]
+type LayoutListField = tuple[str, ShapeLike | LayoutList]
+type LayoutList = list[LayoutListField]
+type LayoutIterable = Iterable[LayoutListField]
 type MethodLayout = StructLayout | LayoutIterable
-MethodStruct: TypeAlias = "View[StructLayout]"  # defined as TypeAlias because of def_method logic
+MethodStruct: TypeAlias = "View[StructLayout]"  # noqa: UP040 # defined as TypeAlias because of def_method logic
 
-type NameIntDict = Mapping[str, Union[int, "NameIntDict"]]
-type NameValueDict = Mapping[str, Union[ValueLike, "NameValueDict"]]
+type NameIntDict = Mapping[str, int | NameIntDict]
+type NameValueDict = Mapping[str, ValueLike | NameValueDict]
 type ReturnDict = ValueLike | NameValueDict
 
 type ROGraph[T] = Mapping[T, Iterable[T]]
@@ -48,7 +49,7 @@ type GraphCC[T] = set[T]
 
 @runtime_checkable
 class HasDebugSignals(Protocol):
-    def debug_signals(self) -> ValueBundle: ...
+    def debug_signals(self) -> DebugBundle: ...
 
 
 def type_self_kwargs_as[**P](as_func: Callable[Concatenate[Any, P], Any]):
@@ -64,11 +65,9 @@ def type_self_kwargs_as[**P](as_func: Callable[Concatenate[Any, P], Any]):
     return return_func
 
 
-def type_self_add_1pos_kwargs_as[
-    **P, T, U
-](as_func: Callable[Concatenate[Any, P], Any]) -> Callable[
-    [Callable[Concatenate[Any, T, ...], U]], Callable[Concatenate[Any, T, P], U]
-]:
+def type_self_add_1pos_kwargs_as[**P, T, U](
+    as_func: Callable[Concatenate[Any, P], Any],
+) -> Callable[[Callable[Concatenate[Any, T, ...], U]], Callable[Concatenate[Any, T, P], U]]:
     """
     Decorator used to annotate `**kwargs` type to be the same as named arguments from `as_func` method.
 

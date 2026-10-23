@@ -8,10 +8,9 @@ from transactron.utils.amaranth_ext.elaboratables import OneHotMux
 from transactron.utils.transactron_helpers import from_method_layout, make_layout
 from ..core import *
 from ..utils import SrcLoc, get_src_loc, MultiPriorityEncoder
-from typing import Optional
 from transactron.utils import LayoutList, MethodLayout
 
-__all__ = ["MemoryBank", "ContentAddressableMemory", "AsyncMemoryBank"]
+__all__ = ["AsyncMemoryBank", "ContentAddressableMemory", "MemoryBank"]
 
 
 class MemoryBank(Elaboratable):
@@ -39,7 +38,7 @@ class MemoryBank(Elaboratable):
         *,
         shape: ShapeLike,
         depth: int,
-        granularity: Optional[int] = None,
+        granularity: int | None = None,
         transparent: bool = False,
         read_on_resp: bool = False,
         read_ports: int = 1,
@@ -114,12 +113,12 @@ class MemoryBank(Elaboratable):
         # read_output_next[i] is the value of the memory cell read_output_addr[i] in the next clock cycle
         read_output_valid = [Signal() for _ in range(self.reads_ports)]
         read_output_next = [Signal(self.shape) for _ in range(self.reads_ports)]
-        read_output_addr = [Signal(range(self.depth)) for _ in range(self.reads_ports)]
+        read_output_addr = [Signal(range(self.depth), reset_less=True) for _ in range(self.reads_ports)]
 
         overflow_valid = [Signal() for _ in range(self.reads_ports)]
-        overflow_data = [Signal(self.shape) for _ in range(self.reads_ports)]
+        overflow_data = [Signal(self.shape, reset_less=True) for _ in range(self.reads_ports)]
         overflow_next = [Signal(self.shape) for _ in range(self.reads_ports)]
-        overflow_addr = [Signal(range(self.depth)) for _ in range(self.reads_ports)]
+        overflow_addr = [Signal(range(self.depth), reset_less=True) for _ in range(self.reads_ports)]
 
         for i in range(self.reads_ports):
             if self.read_on_resp:
@@ -259,9 +258,14 @@ class ContentAddressableMemory(Elaboratable):
         m = TModule()
 
         address_array = Array(
-            [Signal(self.address_layout, name=f"address_array_{i}") for i in range(self.entries_number)]
+            [
+                Signal(self.address_layout, name=f"address_array_{i}", reset_less=True)
+                for i in range(self.entries_number)
+            ]
         )
-        data_array = Array([Signal(self.data_layout, name=f"data_array_{i}") for i in range(self.entries_number)])
+        data_array = Array(
+            [Signal(self.data_layout, name=f"data_array_{i}", reset_less=True) for i in range(self.entries_number)]
+        )
         valids = Signal(self.entries_number, name="valids")
 
         m.submodules.encoder_read = encoder_read = MultiPriorityEncoder(self.entries_number, 1)
@@ -327,7 +331,7 @@ class AsyncMemoryBank(Elaboratable):
         *,
         shape: ShapeLike,
         depth: int,
-        granularity: Optional[int] = None,
+        granularity: int | None = None,
         read_ports: int = 1,
         write_ports: int = 1,
         memory_type: amemory.AbstractMemoryConstructor[ShapeLike, Value] = memory.Memory,

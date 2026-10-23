@@ -73,11 +73,11 @@ class TestMethodMap(TestCaseWithSimulator):
         imeth = TestbenchIO(Adapter(i=self.layout, o=self.layout))
         ometh = TestbenchIO(Adapter(i=self.layout, o=self.layout))
 
-        @def_method_mock(lambda: imeth)
+        @def_method_mock(imeth)
         def imeth_mock(data):
             return {"data": data + 1}
 
-        @def_method_mock(lambda: ometh)
+        @def_method_mock(ometh)
         def ometh_mock(data):
             return {"data": data - 1}
 
@@ -114,7 +114,7 @@ class TestMethodFilter(TestCaseWithSimulator):
     def test_method_filter_with_methods(self):
         cmeth = TestbenchIO(Adapter(i=self.layout, o=data_layout(1)))
 
-        @def_method_mock(lambda: cmeth)
+        @def_method_mock(cmeth)
         def cmeth_mock(data):
             return {"data": data % 2}
 
@@ -235,12 +235,14 @@ class NonexclusiveWrapperTestCircuit(Elaboratable):
         self.callers = callers
         self.sources: list[list[TestbenchIO]] = []
 
+        layout = data_layout(self.iosize)
+
+        self.target = TestbenchIO(Adapter(i=layout, o=layout))
+
     def elaborate(self, platform):
         m = TModule()
 
-        layout = data_layout(self.iosize)
-
-        m.submodules.target = self.target = TestbenchIO(Adapter(i=layout, o=layout))
+        m.submodules.target = self.target
 
         for i in range(self.wrappers):
             nonex = NonexclusiveWrapper.create(self.target.adapter.iface).use(m)
@@ -273,7 +275,7 @@ class TestNonexclusiveWrapper(TestCaseWithSimulator):
 
             return process
 
-        @def_method_mock(lambda: m.target)
+        @def_method_mock(m.target)
         def target(data):
             return {"data": data + 1}
 
@@ -289,7 +291,7 @@ class TestNonexclusiveWrapper(TestCaseWithSimulator):
             res1, res2 = await CallTrigger(sim).call(m.sources[0][0], data=1).call(m.sources[0][1], data=2).until_done()
             assert res1 is not None and res2 is not None  # there was no conflict, however the result is undefined
 
-        @def_method_mock(lambda: m.target)
+        @def_method_mock(m.target)
         def target(data):
             return {"data": data + 1}
 

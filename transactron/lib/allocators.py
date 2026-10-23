@@ -7,7 +7,7 @@ from amaranth.lib.data import ArrayLayout
 from transactron.utils.amaranth_ext.functions import mod_add
 
 
-__all__ = ["PriorityEncoderAllocator", "PreservedOrderAllocator", "CircularAllocator"]
+__all__ = ["CircularAllocator", "PreservedOrderAllocator", "PriorityEncoderAllocator"]
 
 
 class PriorityEncoderAllocator(Elaboratable):
@@ -16,15 +16,25 @@ class PriorityEncoderAllocator(Elaboratable):
     This module allows to allocate and deallocate identifiers from a continuous
     range. Multiple identifiers can be allocated or deallocated in a single
     clock cycle.
-
-    Attributes
-    ----------
-    alloc : Methods
-        Methods which allocate a fresh identifier. If there is too little free
-        identifiers, some or all of the methods are disabled.
-    free : Methods
-        Methods which deallocate a single identifier in one cycle.
     """
+
+    alloc: Methods
+    """
+    Allocates a fresh identifier. If there is not enough free identifiers,
+    some or all of the methods are disabled.
+    """
+
+    free: Methods
+    """Deallocates a single identifier in one cycle."""
+
+    peek: Method
+    """Returns the bitmask of free identifiers."""
+
+    replace: Method
+    """Replaces the bitmask of free identifiers."""
+
+    clear: Method
+    """Restore the initial state of the allocator."""
 
     def __init__(self, entries: int, alloc_ways: int = 1, free_ways: int = 1, *, init: int = -1):
         """
@@ -45,6 +55,9 @@ class PriorityEncoderAllocator(Elaboratable):
 
         self.alloc = Methods(alloc_ways, o=[("ident", range(entries))])
         self.free = Methods(free_ways, i=[("ident", range(entries))])
+        self.peek = Method(o=[("mask", self.entries)])
+        self.replace = Method(i=[("mask", self.entries)])
+        self.clear = Method()
 
     def elaborate(self, platform) -> TModule:
         m = TModule()
@@ -63,6 +76,18 @@ class PriorityEncoderAllocator(Elaboratable):
         def _(_, ident):
             m.d.sync += not_used.bit_select(ident, 1).eq(1)
 
+        @def_method(m, self.peek)
+        def _():
+            return {"mask": not_used}
+
+        @def_method(m, self.replace)
+        def _(mask):
+            m.d.sync += not_used.eq(mask)
+
+        @def_method(m, self.clear, nonexclusive=True)
+        def _():
+            self.replace(m, mask=self.init)
+
         return m
 
 
@@ -73,20 +98,28 @@ class PreservedOrderAllocator(Elaboratable):
     continuous range. The order of allocations is preserved in the form of
     a permutation of identifiers. Smaller positions correspond to earlier
     (older) allocations.
-
-    Attributes
-    ----------
-    alloc : Method
-        Allocates a fresh identifier.
-    free : Method
-        Frees a previously allocated identifier.
-    free_idx : Method
-        Frees a previously allocated identifier at the given index of the
-        allocation order.
-    order : Method
-        Returns the allocation order as a permutation of identifiers
-        and the number of allocated identifiers.
     """
+
+    alloc: Method
+    """Allocates a fresh identifier."""
+
+    free: Method
+    """Frees a previously allocated identifier."""
+
+    free_idx: Method
+    """
+    Frees a previously allocated identifier at the given index of the
+    allocation order.
+    """
+
+    order: Method
+    """
+    Returns the allocation order as a permutation of identifiers
+    and the number of allocated identifiers.
+    """
+
+    clear: Method
+    """Restores the initial state of the allocator."""
 
     def __init__(self, entries: int):
         self.entries = entries
@@ -97,11 +130,13 @@ class PreservedOrderAllocator(Elaboratable):
         self.order = Method(
             o=[("used", range(entries + 1)), ("order", ArrayLayout(range(self.entries), self.entries))],
         )
+        self.clear = Method()
 
     def elaborate(self, platform) -> TModule:
         m = TModule()
 
-        order = Signal(ArrayLayout(range(self.entries), self.entries), init=list(range(self.entries)))
+        # TODO: was originally an ArrayLayout but this triggered a Yosys bug.
+        order = Array(Signal(range(self.entries), init=entry) for entry in range(self.entries))
         used = Signal(range(self.entries + 1))
         incr_used = Signal(range(self.entries + 1))
 
@@ -129,7 +164,13 @@ class PreservedOrderAllocator(Elaboratable):
 
         @def_method(m, self.order, nonexclusive=True)
         def _():
-            return {"used": used, "order": order}
+            return {"used": used, "order": [order[i] for i in range(self.entries)]}
+
+        @def_method(m, self.clear, nonexclusive=True)
+        def _():
+            for i in range(self.entries):
+                m.d.sync += order[i].eq(i)
+            m.d.sync += used.eq(0)
 
         return m
 
@@ -284,7 +325,7 @@ class CircularAllocator(Elaboratable):
                 "new_start_idx": new_start_idx,
             }
 
-        @def_method(m, self.clear)
+        @def_method(m, self.clear, nonexclusive=True)
         def _():
             m.d.sync += self.start_idx.eq(0)
             m.d.sync += self.end_idx.eq(0)
