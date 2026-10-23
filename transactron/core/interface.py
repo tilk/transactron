@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from .method import Method, Methods, MethodDir
 
 
-__all__ = ["Interface", "InterfaceMember", "InterfaceMembers", "InterfacePart", "interface_members"]
+__all__ = ["Interface", "InterfaceMember", "InterfaceMembers", "InterfacePart", "interface_members", "provide"]
 
 
 @final
-@dataclass
+@dataclass(frozen=True)
 class InterfaceMember:
     mdir: MethodDir
     iface: "InterfacePart"
@@ -65,13 +65,20 @@ def interface_part(obj: Sequence) -> Sequence[InterfacePart]: ...
 def interface_part(obj: Mapping) -> Mapping[str, InterfacePart]: ...
 
 
+@overload
+def interface_part(obj: object) -> InterfacePart: ...
+
+
 def interface_part(obj) -> InterfacePart:
-    if isinstance(obj, Method):
+    if isinstance(obj, InterfaceMembers):
+        raise TypeError("interface_part called on InterfaceMembers")
+    elif isinstance(obj, Method):
         return obj
     elif isinstance(obj, Sequence):
         return tuple(interface_part(elem) for elem in obj)
     elif isinstance(obj, Mapping):
-        assert all(isinstance(key, str) for key in obj.keys())
+        if not all(isinstance(key, str) for key in obj.keys()):
+            raise TypeError("Interface mapping keys must be strings")
         return {key: interface_part(elem) for (key, elem) in obj.items()}
     else:
         return interface_members(obj)
@@ -81,7 +88,8 @@ def part_provide(lhs: InterfacePart, rhs: InterfacePart):
     if isinstance(lhs, Method) and isinstance(rhs, Method):
         lhs.provide(rhs)
     elif isinstance(lhs, InterfaceMembers) and isinstance(rhs, InterfaceMembers):
-        assert lhs.keys() == rhs.keys()
+        if lhs.keys() != rhs.keys():
+            raise ValueError(f"Interface members have different names: {list(lhs.keys())} and {list(rhs.keys())}")
         for key in lhs.keys():
             lhs_member = lhs[key]
             rhs_member = rhs[key]
@@ -92,6 +100,8 @@ def part_provide(lhs: InterfacePart, rhs: InterfacePart):
             else:
                 part_provide(rhs_member.iface, lhs_member.iface)
     elif isinstance(lhs, Sequence) and isinstance(rhs, Sequence):
+        if len(lhs) != len(rhs):
+            raise ValueError(f"Interface sequences have different lengths: {len(lhs)} and {len(rhs)}")
         for lhs_item, rhs_item in zip(lhs, rhs, strict=True):
             part_provide(lhs_item, rhs_item)
     elif (
@@ -100,9 +110,12 @@ def part_provide(lhs: InterfacePart, rhs: InterfacePart):
         and not isinstance(lhs, InterfaceMembers)
         and not isinstance(rhs, InterfaceMembers)
     ):
-        assert lhs.keys() == rhs.keys()
+        if lhs.keys() != rhs.keys():
+            raise ValueError(f"Interface mappings have different keys: {list(lhs.keys())} and {list(rhs.keys())}")
         for key in lhs.keys():
             part_provide(lhs[key], rhs[key])
+    else:
+        raise TypeError(f"Incompatible interface parts: {type(lhs).__name__} and {type(rhs).__name__}")
 
 
 def provide(lhs, rhs):
