@@ -39,14 +39,24 @@ def interface_members(obj) -> InterfaceMembers:
     for cls in reversed(obj.__class__.__mro__):
         hints.update(inspect.get_annotations(cls, eval_str=True))
 
+    hint_dirs: dict[str, MethodDir] = {}
+    for name, hint in hints.items():
+        dirs = [dir for dir in getattr(hint, "__metadata__", ()) if isinstance(dir, MethodDir)]
+        if len(dirs) > 1:
+            raise TypeError(f'Interface member "{name}" is annotated with multiple directions')
+        elif dirs:
+            hint_dirs[name] = dirs[0]
+
+    attrs = vars(obj)
+    for name in hint_dirs:
+        if name not in attrs:
+            raise AttributeError(f'Interface member "{name}" is annotated, but not set')
+
     ret: dict[str, InterfaceMember] = {}
 
-    for name, attr in vars(obj).items():
-        if name in hints and hasattr(hints[name], "__metadata__"):
-            dirs = [dir for dir in hints[name].__metadata__ if isinstance(dir, MethodDir)]
-            if len(dirs) != 1:
-                continue
-            ret[name] = InterfaceMember(dirs[0], interface_part(attr))
+    for name, attr in attrs.items():
+        if name in hint_dirs:
+            ret[name] = InterfaceMember(hint_dirs[name], interface_part(attr))
         elif isinstance(attr, (Method, Methods)):
             ret[name] = InterfaceMember(MethodDir.PROVIDED, interface_part(attr))
 
