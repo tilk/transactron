@@ -11,12 +11,14 @@ from .core import (
     TransactronContextElaboratable,
     TransactronContextComponent,
 )
-from .utils import assign, AssignType, assertion
+from .utils import assign, AssignType, assertion, MethodLayout, MethodStruct
 from .lib import condition
 
 __all__ = [
     "AssignType",
     "Method",
+    "MethodLayout",
+    "MethodStruct",
     "Methods",
     "Priority",
     "Provided",
