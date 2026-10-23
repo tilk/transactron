@@ -1,6 +1,6 @@
 import inspect
-from collections.abc import Iterable, Sequence, Mapping
-from typing import Any, Self, final, overload
+from collections.abc import Callable, Iterable, Sequence, Mapping
+from typing import Any, final, overload
 from dataclasses import dataclass
 from .method import Method, Methods, MethodDir
 
@@ -34,10 +34,20 @@ class InterfaceMembers(Mapping[str, "InterfaceMember"]):
 type InterfacePart = Method | InterfaceMembers | Sequence["InterfacePart"] | Mapping[str, "InterfacePart"]
 
 
-def interface_members(obj) -> InterfaceMembers:
+def interface_members(obj, cls: type | None = None) -> InterfaceMembers:
+    """Collect the interface members of an object.
+
+    If `cls` is given, only the members annotated in `cls` and its base
+    classes are collected. Otherwise, annotations from the object's class
+    are used, and unannotated `Method` and `Methods` attributes are
+    collected as provided members.
+    """
+    if cls is not None and not isinstance(obj, cls):
+        raise TypeError(f"Object of type {type(obj).__name__} is not an instance of {cls.__name__}")
+
     hints: dict[str, Any] = {}
-    for cls in reversed(obj.__class__.__mro__):
-        hints.update(inspect.get_annotations(cls, eval_str=True))
+    for base in reversed((cls or type(obj)).__mro__):
+        hints.update(inspect.get_annotations(base, eval_str=True))
 
     hint_dirs: dict[str, MethodDir] = {}
     for name, hint in hints.items():
@@ -57,7 +67,7 @@ def interface_members(obj) -> InterfaceMembers:
     for name, attr in attrs.items():
         if name in hint_dirs:
             ret[name] = InterfaceMember(hint_dirs[name], interface_part(attr))
-        elif isinstance(attr, (Method, Methods)):
+        elif cls is None and isinstance(attr, (Method, Methods)):
             ret[name] = InterfaceMember(MethodDir.PROVIDED, interface_part(attr))
 
     return InterfaceMembers(ret.items())
@@ -132,9 +142,48 @@ def provide(lhs, rhs):
     part_provide(interface_part(lhs), interface_part(rhs))
 
 
-class Interface:
-    def members(self) -> InterfaceMembers:
-        return interface_members(self)
+def _scoped_provide(cls: type, lhs, rhs):
+    part_provide(interface_members(lhs, cls), interface_members(rhs, cls))
 
-    def provide(self, interface: Self):
-        part_provide(self.members(), interface.members())
+
+class _MembersDescriptor:
+    @overload
+    def __get__[T](self, obj: None, owner: type[T]) -> Callable[[T], InterfaceMembers]: ...
+
+    @overload
+    def __get__(self, obj: object, owner: Any = None) -> Callable[[], InterfaceMembers]: ...
+
+    def __get__(self, obj: Any, owner: Any = None) -> Any:
+        if obj is None:
+            return lambda obj: interface_members(obj, owner)
+        else:
+            return lambda: interface_members(obj, type(obj))
+
+
+class _ProvideDescriptor:
+    @overload
+    def __get__[T](self, obj: None, owner: type[T]) -> Callable[[T, T], None]: ...
+
+    @overload
+    def __get__[T](self, obj: T, owner: Any = None) -> Callable[[T], None]: ...
+
+    def __get__(self, obj: Any, owner: Any = None) -> Any:
+        if obj is None:
+            return lambda lhs, rhs: _scoped_provide(owner, lhs, rhs)
+        else:
+            return lambda rhs: _scoped_provide(type(obj), obj, rhs)
+
+
+class Interface:
+    """Base class for interfaces.
+
+    The members of an interface are its attributes annotated with
+    `Provided` or `Required`. When `members` or `provide` is accessed
+    through a class, e.g. `A.provide(lhs, rhs)`, only the members declared
+    in that class and its base classes are used. This allows a class
+    implementing multiple interfaces to provide each of them separately.
+    When accessed through an object, the object's class is used.
+    """
+
+    members = _MembersDescriptor()
+    provide = _ProvideDescriptor()
