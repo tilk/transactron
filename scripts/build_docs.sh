@@ -57,4 +57,7 @@ then
 fi
 
 sphinx-apidoc --tocfile modules -o $DOCS_DIR $ROOT_PATH/transactron/
+# The root module only re-exports names documented in submodules.
+# Don't index them twice, as this causes ambiguous cross-references.
+sed -i 's/^\.\. automodule:: transactron$/&\n   :no-index:/' $DOCS_DIR/transactron.rst
 sphinx-build -b html -W $DOCS_DIR $BUILD_DIR
