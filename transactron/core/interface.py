@@ -183,9 +183,9 @@ There are two distinct ways to use `provide`.
   ordinary class. Only `Provided` and `Required` annotated attributes
   are considered for connection.
 
+:meta hide-value:
+
 See Also
 --------
 interface_members : Used internally to identify which methods to provide.
-
-:meta hide-value:
 """
