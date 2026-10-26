@@ -37,6 +37,11 @@ type InterfacePart = Method | InterfaceMembers | Sequence["InterfacePart"] | Map
 def interface_members(obj, cls: type | None = None) -> InterfaceMembers:
     """Collect the interface members of an object.
 
+    Interface members are attributes annotated with `Required` and
+    `Provided`. Accepted types are `Method` and `Methods` instances,
+    arbitrary sequences and mappings of accepted types, and arbitrary
+    objects containing interface members.
+
     If `cls` is given, only the members annotated in `cls` and its base
     classes are collected. `cls` can be a `Protocol`, which the object
     doesn't need to explicitly inherit from. Otherwise, annotations from
@@ -162,9 +167,9 @@ There are two distinct ways to use `provide`.
   provided by the corresponding methods of `lhs`.
 
   Used this way, `lhs` and `rhs` can be anything `interface_members`
-  accepts as a valid annotated attribute, including `Method` instances,
-  sequences (which includes `Methods`), mappings and arbitrary objects.
-  When objects are given, every `Method` and `Methods` atribute
+  accepts as the value of an annotated attribute, including `Method`
+  instances, sequences (which includes `Methods`), mappings and arbitrary
+  objects. When objects are given, every `Method` and `Methods` attribute
   is considered for connection, in addition to all `Provided` and
   `Required` attributes.
 
@@ -174,11 +179,13 @@ There are two distinct ways to use `provide`.
   implementing multiple interfaces to provide each of them separately.
 
   When used this way, `lhs` and `rhs` must both implement `cls`, if
-  `cls` is a `Protocol`, or be subclasses of `cls`, if `cls` is an
+  `cls` is a `Protocol`, or be instances of `cls`, if `cls` is an
   ordinary class. Only `Provided` and `Required` annotated attributes
   are considered for connection.
 
 See Also
 --------
 interface_members : Used internally to identify which methods to provide.
+
+:meta hide-value:
 """
