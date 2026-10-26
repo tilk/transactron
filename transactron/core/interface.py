@@ -1,6 +1,7 @@
 import inspect
+from types import UnionType
 from collections.abc import Callable, Iterable, Sequence, Mapping
-from typing import Any, final, overload, is_protocol
+from typing import Any, final, get_args, get_origin, overload, is_protocol
 from dataclasses import dataclass
 from .method import Method, Methods, MethodDir
 
@@ -47,6 +48,12 @@ def interface_members(obj, cls: type | None = None) -> InterfaceMembers:
     doesn't need to explicitly inherit from. Otherwise, annotations from
     the object's class are used, and unannotated `Method` and `Methods`
     attributes are collected as provided members.
+
+    Members are collected recursively according to their declared types,
+    e.g. a member annotated `Provided[list[P]]` is collected as a list of
+    objects implementing `P`, using only the members declared in `P`.
+    If the declared type is `Any`, the actual types of the values are
+    used, as if `cls` was not given.
     """
     if cls is not None and not is_protocol(cls) and not isinstance(obj, cls):
         raise TypeError(f"Object of type {type(obj).__name__} is not an instance of {cls.__name__}")
@@ -55,13 +62,13 @@ def interface_members(obj, cls: type | None = None) -> InterfaceMembers:
     for base in reversed((cls or type(obj)).__mro__):
         hints.update(inspect.get_annotations(base, eval_str=True))
 
-    hint_dirs: dict[str, MethodDir] = {}
+    hint_dirs: dict[str, tuple[MethodDir, object]] = {}
     for name, hint in hints.items():
         dirs = [dir for dir in getattr(hint, "__metadata__", ()) if isinstance(dir, MethodDir)]
         if len(dirs) > 1:
             raise TypeError(f'Interface member "{name}" is annotated with multiple directions')
         elif dirs:
-            hint_dirs[name] = dirs[0]
+            hint_dirs[name] = (dirs[0], hint.__origin__)
 
     attrs = vars(obj)
     for name in hint_dirs:
@@ -72,7 +79,8 @@ def interface_members(obj, cls: type | None = None) -> InterfaceMembers:
 
     for name, attr in attrs.items():
         if name in hint_dirs:
-            ret[name] = InterfaceMember(hint_dirs[name], _interface_part(attr))
+            mdir, hint = hint_dirs[name]
+            ret[name] = InterfaceMember(mdir, _interface_part(attr, hint))
         elif cls is None and isinstance(attr, (Method, Methods)):
             ret[name] = InterfaceMember(MethodDir.PROVIDED, _interface_part(attr))
 
@@ -80,34 +88,51 @@ def interface_members(obj, cls: type | None = None) -> InterfaceMembers:
 
 
 @overload
-def _interface_part(obj: Method) -> Method: ...
+def _interface_part(obj: Method, hint: object | None = None) -> Method: ...
 
 
 @overload
-def _interface_part(obj: Sequence) -> Sequence[InterfacePart]: ...
+def _interface_part(obj: Sequence, hint: object | None = None) -> Sequence[InterfacePart]: ...
 
 
 @overload
-def _interface_part(obj: Mapping) -> Mapping[str, InterfacePart]: ...
+def _interface_part(obj: Mapping, hint: object | None = None) -> Mapping[str, InterfacePart]: ...
 
 
 @overload
-def _interface_part(obj: object) -> InterfacePart: ...
+def _interface_part(obj: object, hint: object | None = None) -> InterfacePart: ...
 
 
-def _interface_part(obj) -> InterfacePart:
+def _interface_part(obj, hint: object | None = None) -> InterfacePart:
     if isinstance(obj, InterfaceMembers):
         raise TypeError("interface_part called on InterfaceMembers")
-    elif isinstance(obj, Method):
+
+    # Without a declared type, the actual type of `obj` is used.
+    if hint is Any:
+        hint = None
+    origin = type(obj) if hint is None else get_origin(hint) or hint
+    args = get_args(hint)
+    if origin is UnionType or not isinstance(origin, type):
+        raise TypeError(f"Unsupported interface member type: {hint}")
+    if not is_protocol(origin) and not isinstance(obj, origin):
+        raise TypeError(f"Object of type {type(obj).__name__} is not an instance of {hint}")
+
+    if issubclass(origin, Method):
         return obj
-    elif isinstance(obj, Sequence):
-        return tuple(_interface_part(elem) for elem in obj)
-    elif isinstance(obj, Mapping):
-        if not all(isinstance(key, str) for key in obj.keys()):
+    elif issubclass(origin, tuple) and args and args[-1] is not Ellipsis:
+        if len(obj) != len(args):
+            raise ValueError(f"Tuple of length {len(obj)} does not match {hint}")
+        return tuple(_interface_part(elem, elem_hint) for elem, elem_hint in zip(obj, args))
+    elif issubclass(origin, Sequence):
+        elem_hint = args[0] if args else None
+        return tuple(_interface_part(elem, elem_hint) for elem in obj)
+    elif issubclass(origin, Mapping):
+        if args and args[0] not in (str, Any) or not all(isinstance(key, str) for key in obj.keys()):
             raise TypeError("Interface mapping keys must be strings")
-        return {key: _interface_part(elem) for (key, elem) in obj.items()}
+        elem_hint = args[1] if args else None
+        return {key: _interface_part(elem, elem_hint) for (key, elem) in obj.items()}
     else:
-        return interface_members(obj)
+        return interface_members(obj, None if hint is None else origin)
 
 
 def _part_provide(lhs: InterfacePart, rhs: InterfacePart):
@@ -181,7 +206,8 @@ There are two distinct ways to use `provide`.
   When used this way, `lhs` and `rhs` must both implement `cls`, if
   `cls` is a `Protocol`, or be instances of `cls`, if `cls` is an
   ordinary class. Only `Provided` and `Required` annotated attributes
-  are considered for connection.
+  are considered for connection, and nested members are connected
+  according to their declared types.
 
 :meta hide-value:
 
