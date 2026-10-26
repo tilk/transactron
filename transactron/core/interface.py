@@ -1,11 +1,11 @@
 import inspect
 from collections.abc import Callable, Iterable, Sequence, Mapping
-from typing import Any, final, overload
+from typing import Any, final, overload, is_protocol
 from dataclasses import dataclass
 from .method import Method, Methods, MethodDir
 
 
-__all__ = ["Interface", "InterfaceMember", "InterfaceMembers", "InterfacePart", "interface_members", "provide"]
+__all__ = ["InterfaceMember", "InterfaceMembers", "InterfacePart", "interface_members", "provide"]
 
 
 @final
@@ -38,11 +38,12 @@ def interface_members(obj, cls: type | None = None) -> InterfaceMembers:
     """Collect the interface members of an object.
 
     If `cls` is given, only the members annotated in `cls` and its base
-    classes are collected. Otherwise, annotations from the object's class
-    are used, and unannotated `Method` and `Methods` attributes are
-    collected as provided members.
+    classes are collected. `cls` can be a `Protocol`, which the object
+    doesn't need to explicitly inherit from. Otherwise, annotations from
+    the object's class are used, and unannotated `Method` and `Methods`
+    attributes are collected as provided members.
     """
-    if cls is not None and not isinstance(obj, cls):
+    if cls is not None and not is_protocol(cls) and not isinstance(obj, cls):
         raise TypeError(f"Object of type {type(obj).__name__} is not an instance of {cls.__name__}")
 
     hints: dict[str, Any] = {}
@@ -66,45 +67,45 @@ def interface_members(obj, cls: type | None = None) -> InterfaceMembers:
 
     for name, attr in attrs.items():
         if name in hint_dirs:
-            ret[name] = InterfaceMember(hint_dirs[name], interface_part(attr))
+            ret[name] = InterfaceMember(hint_dirs[name], _interface_part(attr))
         elif cls is None and isinstance(attr, (Method, Methods)):
-            ret[name] = InterfaceMember(MethodDir.PROVIDED, interface_part(attr))
+            ret[name] = InterfaceMember(MethodDir.PROVIDED, _interface_part(attr))
 
     return InterfaceMembers(ret.items())
 
 
 @overload
-def interface_part(obj: Method) -> Method: ...
+def _interface_part(obj: Method) -> Method: ...
 
 
 @overload
-def interface_part(obj: Sequence) -> Sequence[InterfacePart]: ...
+def _interface_part(obj: Sequence) -> Sequence[InterfacePart]: ...
 
 
 @overload
-def interface_part(obj: Mapping) -> Mapping[str, InterfacePart]: ...
+def _interface_part(obj: Mapping) -> Mapping[str, InterfacePart]: ...
 
 
 @overload
-def interface_part(obj: object) -> InterfacePart: ...
+def _interface_part(obj: object) -> InterfacePart: ...
 
 
-def interface_part(obj) -> InterfacePart:
+def _interface_part(obj) -> InterfacePart:
     if isinstance(obj, InterfaceMembers):
         raise TypeError("interface_part called on InterfaceMembers")
     elif isinstance(obj, Method):
         return obj
     elif isinstance(obj, Sequence):
-        return tuple(interface_part(elem) for elem in obj)
+        return tuple(_interface_part(elem) for elem in obj)
     elif isinstance(obj, Mapping):
         if not all(isinstance(key, str) for key in obj.keys()):
             raise TypeError("Interface mapping keys must be strings")
-        return {key: interface_part(elem) for (key, elem) in obj.items()}
+        return {key: _interface_part(elem) for (key, elem) in obj.items()}
     else:
         return interface_members(obj)
 
 
-def part_provide(lhs: InterfacePart, rhs: InterfacePart):
+def _part_provide(lhs: InterfacePart, rhs: InterfacePart):
     if isinstance(lhs, Method) and isinstance(rhs, Method):
         lhs.provide(rhs)
     elif isinstance(lhs, InterfaceMembers) and isinstance(rhs, InterfaceMembers):
@@ -116,14 +117,14 @@ def part_provide(lhs: InterfacePart, rhs: InterfacePart):
             if lhs_member.mdir != rhs_member.mdir:
                 raise ValueError(f'Interface members "{key}" have different directions')
             elif lhs_member.mdir == MethodDir.PROVIDED:
-                part_provide(lhs_member.iface, rhs_member.iface)
+                _part_provide(lhs_member.iface, rhs_member.iface)
             else:
-                part_provide(rhs_member.iface, lhs_member.iface)
+                _part_provide(rhs_member.iface, lhs_member.iface)
     elif isinstance(lhs, Sequence) and isinstance(rhs, Sequence):
         if len(lhs) != len(rhs):
             raise ValueError(f"Interface sequences have different lengths: {len(lhs)} and {len(rhs)}")
         for lhs_item, rhs_item in zip(lhs, rhs, strict=True):
-            part_provide(lhs_item, rhs_item)
+            _part_provide(lhs_item, rhs_item)
     elif (
         isinstance(lhs, Mapping)
         and isinstance(rhs, Mapping)
@@ -133,57 +134,51 @@ def part_provide(lhs: InterfacePart, rhs: InterfacePart):
         if lhs.keys() != rhs.keys():
             raise ValueError(f"Interface mappings have different keys: {list(lhs.keys())} and {list(rhs.keys())}")
         for key in lhs.keys():
-            part_provide(lhs[key], rhs[key])
+            _part_provide(lhs[key], rhs[key])
     else:
         raise TypeError(f"Incompatible interface parts: {type(lhs).__name__} and {type(rhs).__name__}")
 
 
-def provide(lhs, rhs):
-    part_provide(interface_part(lhs), interface_part(rhs))
+@final
+class _Provide:
+    """Implementation of `provide`."""
+
+    def __call__(self, lhs: object, rhs: object) -> None:
+        """Connect all interface members of `lhs` and `rhs`."""
+        _part_provide(_interface_part(lhs), _interface_part(rhs))
+
+    def __getitem__[T](self, cls: type[T]) -> Callable[[T, T], None]:
+        """Connect only the interface members declared in `cls`."""
+        return lambda lhs, rhs: _part_provide(interface_members(lhs, cls), interface_members(rhs, cls))
 
 
-def _scoped_provide(cls: type, lhs, rhs):
-    part_provide(interface_members(lhs, cls), interface_members(rhs, cls))
+provide = _Provide()
+"""Connect the interfaces of two objects.
 
+There are two distinct ways to use `provide`.
 
-class _MembersDescriptor:
-    @overload
-    def __get__[T](self, obj: None, owner: type[T]) -> Callable[[T], InterfaceMembers]: ...
+* `provide(lhs, rhs)`: provided methods of `lhs` are provided by the
+  corresponding methods of `rhs`, and required methods of `rhs` are
+  provided by the corresponding methods of `lhs`.
 
-    @overload
-    def __get__(self, obj: object, owner: Any = None) -> Callable[[], InterfaceMembers]: ...
+  Used this way, `lhs` and `rhs` can be anything `interface_members`
+  accepts as a valid annotated attribute, including `Method` instances,
+  sequences (which includes `Methods`), mappings and arbitrary objects.
+  When objects are given, every `Method` and `Methods` atribute
+  is considered for connection, in addition to all `Provided` and
+  `Required` attributes.
 
-    def __get__(self, obj: Any, owner: Any = None) -> Any:
-        if obj is None:
-            return lambda obj: interface_members(obj, owner)
-        else:
-            return lambda: interface_members(obj, type(obj))
+* `provide[cls](lhs, rhs)`: only the members declared in `cls` (e.g. a
+  `Protocol`) and its base classes are connected, and the type checker
+  checks that both objects conform to `cls`. This allows an object
+  implementing multiple interfaces to provide each of them separately.
 
+  When used this way, `lhs` and `rhs` must both implement `cls`, if
+  `cls` is a `Protocol`, or be subclasses of `cls`, if `cls` is an
+  ordinary class. Only `Provided` and `Required` annotated attributes
+  are considered for connection.
 
-class _ProvideDescriptor:
-    @overload
-    def __get__[T](self, obj: None, owner: type[T]) -> Callable[[T, T], None]: ...
-
-    @overload
-    def __get__[T](self, obj: T, owner: Any = None) -> Callable[[T], None]: ...
-
-    def __get__(self, obj: Any, owner: Any = None) -> Any:
-        if obj is None:
-            return lambda lhs, rhs: _scoped_provide(owner, lhs, rhs)
-        else:
-            return lambda rhs: _scoped_provide(type(obj), obj, rhs)
-
-
-class Interface:
-    """Base class for interfaces.
-
-    The members of an interface are its attributes annotated with
-    `Provided` or `Required`. When `members` or `provide` is accessed
-    through a class, e.g. `A.provide(lhs, rhs)`, only the members declared
-    in that class and its base classes are used. This allows a class
-    implementing multiple interfaces to provide each of them separately.
-    When accessed through an object, the object's class is used.
-    """
-
-    members = _MembersDescriptor()
-    provide = _ProvideDescriptor()
+See Also
+--------
+interface_members : Used internally to identify which methods to provide.
+"""
