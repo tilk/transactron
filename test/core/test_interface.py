@@ -2,7 +2,7 @@ import pytest
 from typing import Annotated, Any, Protocol, TypeVar
 
 from transactron import *
-from transactron.core import MethodDir
+from transactron.core import MethodDir, interface_members
 from transactron.testing import TestCaseWithSimulator
 
 
